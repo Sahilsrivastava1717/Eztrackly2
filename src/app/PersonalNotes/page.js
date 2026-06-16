@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
 
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
@@ -128,6 +129,7 @@ function NoteCard({ note, onUpdate, onDelete }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function NotesPage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [notes, setNotes] = useState([]);
   const [search, setSearch] = useState("");
 
@@ -167,7 +169,7 @@ export default function NotesPage() {
     });
 
   return (
-    <div className="min-h-screen bg-[#F5F7FB] px-6 py-6 pb-24">
+    <div className="min-h-screen bg-transparent px-6 py-6 pb-24">
       <div className="mx-auto max-w-7xl space-y-6">
 
         {/* ── Header ── */}
@@ -233,14 +235,17 @@ export default function NotesPage() {
 
       {/* ── FAB ── */}
       <button
-        onClick={create}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
-        title="New note"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
-    </div>
+              onClick={() => setDrawerOpen(true)}
+              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+              title="Add a quick task"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+       
+            {/* Quick Task Drawer */}
+            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+          </div>
   );
 }

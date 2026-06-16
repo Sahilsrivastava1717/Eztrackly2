@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
 
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
@@ -561,6 +562,7 @@ function DocCard({ doc, onDelete }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ContentPage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [docs, setDocs] = useState([]);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
@@ -854,17 +856,17 @@ export default function ContentPage() {
 
       {/* ── FAB ── */}
       <button
-        onClick={() => setCreateOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
-        title="New document"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
-
-      <NewDocModal open={createOpen} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
-      <DeleteModal open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} deleting={deleting} />
-    </div>
+              onClick={() => setDrawerOpen(true)}
+              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+              title="Add a quick task"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+       
+            {/* Quick Task Drawer */}
+            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+          </div>
   );
 }

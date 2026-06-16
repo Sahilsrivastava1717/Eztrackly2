@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
 
 // ── date helpers (no imports) ─────────────────────────────────────────────────
 function startOfDay(d) { const r = new Date(d); r.setHours(0,0,0,0); return r; }
@@ -101,6 +102,7 @@ function EmptyState({ message }) {
 // ── page ──────────────────────────────────────────────────────────────────────
 export default function MeetingsPage() {
   // Change to "user" to hide admin-only tabs
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const role = "user";
   const isAdmin = role === "admin";
 
@@ -663,7 +665,18 @@ export default function MeetingsPage() {
       </div>
 
       {/* FAB */}
-      <button className="fab" title="New meeting">+</button>
+      <button
+              onClick={() => setDrawerOpen(true)}
+              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+              title="Add a quick task"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+       
+            {/* Quick Task Drawer */}
+            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   );
 }

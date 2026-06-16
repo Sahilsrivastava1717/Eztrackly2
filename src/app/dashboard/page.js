@@ -108,7 +108,7 @@ export default function DeveloperDashboard() {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F7FB]">
+    <div className="min-h-screen w-full bg-transparent">
       <div className="mx-auto max-w-7xl space-y-5 px-3 py-6">
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
