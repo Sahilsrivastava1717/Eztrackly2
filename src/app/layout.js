@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "../components/client/AuthContext";
 import { TaskProvider } from "../components/client/TaskContext";
 import AppLayout from "../components/client/AppLayout";
 
@@ -25,11 +26,13 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TaskProvider>
-          <AppLayout>
-            {children}
-          </AppLayout>
-        </TaskProvider>
+        <AuthProvider>
+          <TaskProvider>
+            <AppLayout>
+              {children}
+            </AppLayout>
+          </TaskProvider>
+        </AuthProvider>
       </body>
     </html>
   );

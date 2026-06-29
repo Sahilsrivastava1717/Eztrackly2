@@ -1,9 +1,24 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
+import ProtectedRoute from "../../components/client/ProtectedRoute";
+import { useAuth } from "../../components/client/AuthContext";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...authHeaders(), ...options.headers } });
+  if (!res.ok) throw await res.json();
+  if (res.status === 204) return null;
+  return res.json();
+}
 
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
@@ -15,8 +30,8 @@ const CATEGORY_META = {
     icon: () => (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
+        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
       </svg>
     ),
   },
@@ -75,6 +90,22 @@ const SORT_OPTIONS = [
   { value: "words",   label: "Word count" },
 ];
 
+const PLATFORMS = [
+  { value: "twitter",   label: "Twitter / X" },
+  { value: "linkedin",  label: "LinkedIn" },
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook",  label: "Facebook" },
+];
+
+// ─── Badge ────────────────────────────────────────────────────────────────────
+function Badge({ children, className = "" }) {
+  return (
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", className)}>
+      {children}
+    </span>
+  );
+}
+
 // ─── Custom Dropdown ──────────────────────────────────────────────────────────
 function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
   const [open, setOpen] = useState(false);
@@ -83,9 +114,7 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
   const btnRef = useRef(null);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
@@ -112,16 +141,10 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
   const dropdown = (
     <div style={style} className="overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
       {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onMouseDown={(e) => e.stopPropagation()}
+        <button key={opt.value} type="button" onMouseDown={(e) => e.stopPropagation()}
           onClick={() => { onChange(opt.value); setOpen(false); }}
-          className={cn(
-            "flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors",
-            opt.value === value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700 hover:bg-gray-50"
-          )}
-        >
+          className={cn("flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors",
+            opt.value === value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700 hover:bg-gray-50")}>
           <span className="flex-1 text-left">{opt.label}</span>
           {opt.value === value && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500 shrink-0">
@@ -135,16 +158,9 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "flex h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-gray-700 bg-white transition-colors",
-          open ? "border-blue-400 ring-2 ring-blue-50" : "border-gray-200 hover:border-gray-300",
-          width
-        )}
-      >
+      <button ref={btnRef} type="button" onClick={() => setOpen((o) => !o)}
+        className={cn("flex h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-gray-700 bg-white transition-colors",
+          open ? "border-blue-400 ring-2 ring-blue-50" : "border-gray-200 hover:border-gray-300", width)}>
         {prefix && <span className="text-gray-400 shrink-0">{prefix}</span>}
         <span className="flex-1 text-left truncate">{selected?.label}</span>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0">
@@ -156,11 +172,16 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
   );
 }
 
-// ─── Badge ────────────────────────────────────────────────────────────────────
-function Badge({ children, className = "" }) {
+// ─── Filter Chip ──────────────────────────────────────────────────────────────
+function FilterChip({ label, onClear }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", className)}>
-      {children}
+    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
+      {label}
+      <button onClick={onClear} className="rounded-full p-0.5 hover:bg-blue-100">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </span>
   );
 }
@@ -186,13 +207,6 @@ function NewDocModal({ open, onClose, onCreate }) {
 
   if (!open) return null;
 
-  const PLATFORMS = [
-    { value: "twitter", label: "Twitter / X" },
-    { value: "linkedin", label: "LinkedIn" },
-    { value: "instagram", label: "Instagram" },
-    { value: "facebook", label: "Facebook" },
-  ];
-
   const handleSubmit = async () => {
     if (!title.trim()) return;
     setCreating(true);
@@ -216,15 +230,11 @@ function NewDocModal({ open, onClose, onCreate }) {
         <p className="mt-0.5 text-sm text-gray-500">Choose the content type and add the key details before opening the editor.</p>
 
         <div className="mt-5 space-y-4">
-          {/* Content type */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700">Content type</label>
             <div className="relative" ref={catRef}>
-              <button
-                type="button"
-                onClick={() => setCatOpen((o) => !o)}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 hover:border-gray-300 focus:outline-none"
-              >
+              <button type="button" onClick={() => setCatOpen((o) => !o)}
+                className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 hover:border-gray-300 focus:outline-none">
                 <span>{CATEGORY_META[category]?.label}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
                   <polyline points="6 9 12 15 18 9"/>
@@ -233,14 +243,9 @@ function NewDocModal({ open, onClose, onCreate }) {
               {catOpen && (
                 <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
                   {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => { setCategory(key); setCatOpen(false); }}
+                    <button key={key} type="button" onClick={() => { setCategory(key); setCatOpen(false); }}
                       className={cn("flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors",
-                        category === key ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700 hover:bg-gray-50"
-                      )}
-                    >
+                        category === key ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700 hover:bg-gray-50")}>
                       <span>{meta.label}</span>
                       {category === key && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500">
@@ -254,48 +259,40 @@ function NewDocModal({ open, onClose, onCreate }) {
             </div>
           </div>
 
-          {/* Title */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-700">Title</label>
-            <input
-              autoFocus
+            <input autoFocus
               className="w-full rounded-lg border border-blue-400 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-50"
-              placeholder="Enter title"
-              value={title}
-              maxLength={200}
+              placeholder="Enter title" value={title} maxLength={200}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>
 
-          {/* Platform (social only) */}
+          {category === "blog_post" && (
+            <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              Creation date: {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </div>
+          )}
+
           {category === "social_post" && (
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-700">Platform</label>
-              <select
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-blue-400"
-              >
+              <select value={platform} onChange={(e) => setPlatform(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-blue-400">
                 {PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
           )}
 
-          {/* Custom type */}
           {category === "other" && (
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-700">Content type name</label>
-              <input
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400"
-                placeholder="e.g. Case study"
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-              />
+              <input className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400"
+                placeholder="e.g. Case study" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} />
             </div>
           )}
 
-          {/* Brief */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-xs font-medium text-gray-700">Brief</label>
@@ -306,25 +303,16 @@ function NewDocModal({ open, onClose, onCreate }) {
                 AI refine
               </button>
             </div>
-            <textarea
-              rows={3}
+            <textarea rows={3}
               className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-none"
-              placeholder="Audience, goal, keywords, or notes"
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-            />
+              placeholder="Audience, goal, keywords, or notes" value={brief} onChange={(e) => setBrief(e.target.value)} />
           </div>
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!title.trim() || creating}
-            className="rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
-          >
+          <button onClick={onClose} className="rounded-lg px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
+          <button onClick={handleSubmit} disabled={!title.trim() || creating}
+            className="rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors">
             {creating ? "Creating…" : "Open editor"}
           </button>
         </div>
@@ -333,44 +321,23 @@ function NewDocModal({ open, onClose, onCreate }) {
   );
 }
 
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+// ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ open, onClose, onConfirm, deleting }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-gray-900">Delete this document?</h2>
-        <p className="mt-2 text-sm text-gray-500">
-          This permanently removes the document, its versions, comments and activity. This action can't be undone.
-        </p>
+        <p className="mt-2 text-sm text-gray-500">This permanently removes the document. This action can't be undone.</p>
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} disabled={deleting} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50">
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={deleting}
-            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
-          >
+          <button onClick={onClose} disabled={deleting} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+          <button onClick={onConfirm} disabled={deleting}
+            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
             {deleting ? "Deleting…" : "Delete"}
           </button>
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Filter Chip ──────────────────────────────────────────────────────────────
-function FilterChip({ label, onClear }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
-      {label}
-      <button onClick={onClear} className="rounded-full p-0.5 hover:bg-blue-100">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </span>
   );
 }
 
@@ -380,7 +347,6 @@ function DocRow({ doc, onDelete }) {
   const [menuStyle, setMenuStyle] = useState({});
   const btnRef = useRef(null);
   const menuRef = useRef(null);
-
   const meta = CATEGORY_META[doc.category];
   const sm = STATUS_META[doc.status];
   const Icon = meta?.icon;
@@ -404,16 +370,14 @@ function DocRow({ doc, onDelete }) {
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   };
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white transition-all hover:shadow-md hover:border-gray-200">
-      {/* left accent bar */}
       <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-blue-400 opacity-0 transition-opacity group-hover:opacity-100 rounded-l-xl" />
       <div className="flex items-center gap-4 px-4 py-4">
-        <Link href={`/app/content/${doc.id}`} className="flex flex-1 items-center gap-4 min-w-0">
+        <Link href={`/content/${doc.id}`} className="flex flex-1 items-center gap-4 min-w-0">
           <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition-transform group-hover:scale-105", meta?.color)}>
             {Icon && <Icon />}
           </div>
@@ -422,7 +386,10 @@ function DocRow({ doc, onDelete }) {
               <span className="truncate font-semibold text-gray-900">{doc.title}</span>
               {doc.share_enabled && (
                 <Badge className="bg-blue-50 text-blue-600 border-blue-200 gap-1">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
                   Shared
                 </Badge>
               )}
@@ -432,8 +399,9 @@ function DocRow({ doc, onDelete }) {
               <span>{doc.word_count ?? 0} words</span>
               <span className="flex items-center gap-1">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
                 {formatDate(doc.created_at)}
               </span>
@@ -441,25 +409,19 @@ function DocRow({ doc, onDelete }) {
             </div>
           </div>
         </Link>
-
-        {/* 3-dot menu */}
         <div ref={menuRef}>
-          <button
-            ref={btnRef}
-            onClick={openMenu}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
+          <button ref={btnRef} onClick={openMenu}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/>
+              <circle cx="12" cy="5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1" fill="currentColor"/>
+              <circle cx="12" cy="19" r="1" fill="currentColor"/>
             </svg>
           </button>
           {menuOpen && createPortal(
             <div style={menuStyle} className="overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg w-36">
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
-              >
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                   <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -482,7 +444,6 @@ function DocCard({ doc, onDelete }) {
   const [menuStyle, setMenuStyle] = useState({});
   const btnRef = useRef(null);
   const menuRef = useRef(null);
-
   const meta = CATEGORY_META[doc.category];
   const sm = STATUS_META[doc.status];
   const Icon = meta?.icon;
@@ -506,15 +467,14 @@ function DocCard({ doc, onDelete }) {
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   };
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white transition-all hover:shadow-md hover:border-gray-200 hover:-translate-y-0.5">
       <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-400 opacity-0 transition-opacity group-hover:opacity-100" />
       <div className="p-4">
-        <Link href={`/app/content/${doc.id}`} className="block">
+        <Link href={`/content/${doc.id}`} className="block">
           <div className="flex items-start justify-between gap-2">
             <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg border transition-transform group-hover:scale-105", meta?.color)}>
               {Icon && <Icon />}
@@ -529,22 +489,18 @@ function DocCard({ doc, onDelete }) {
           <div className="mt-1 text-[11px] text-gray-400">Updated {timeAgo(doc.updated_at)}</div>
         </Link>
         <div className="mt-3 flex justify-end border-t border-gray-100 pt-2" ref={menuRef}>
-          <button
-            ref={btnRef}
-            onClick={openMenu}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"
-          >
+          <button ref={btnRef} onClick={openMenu}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/>
+              <circle cx="12" cy="5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1" fill="currentColor"/>
+              <circle cx="12" cy="19" r="1" fill="currentColor"/>
             </svg>
           </button>
           {menuOpen && createPortal(
             <div style={menuStyle} className="overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg w-36">
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50"
-              >
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                   <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -561,9 +517,11 @@ function DocCard({ doc, onDelete }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function ContentPage() {
+function ContentPageContent() {
+  const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -575,7 +533,25 @@ export default function ContentPage() {
   const [deleting, setDeleting] = useState(false);
   const searchRef = useRef(null);
 
-  // Keyboard shortcut
+  const loadDocs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ scope, sort_by: sortBy });
+      if (catFilter !== "all") params.set("category", catFilter);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (search) params.set("search", search);
+      const data = await apiFetch(`/api/v1/content?${params}`);
+      setDocs(data.documents ?? []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [scope, sortBy, catFilter, statusFilter, search]);
+
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
@@ -587,58 +563,52 @@ export default function ContentPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const filtered = useMemo(() => {
-    let list = [...docs];
-    if (scope === "mine") list = list.filter((d) => d.owner);
-    if (catFilter !== "all") list = list.filter((d) => d.category === catFilter);
-    if (statusFilter !== "all") list = list.filter((d) => d.status === statusFilter);
-    if (search) list = list.filter((d) => d.title.toLowerCase().includes(search.toLowerCase()));
-    list.sort((a, b) => {
-      if (sortBy === "title") return a.title.localeCompare(b.title);
-      if (sortBy === "words") return (b.word_count ?? 0) - (a.word_count ?? 0);
-      if (sortBy === "created") return new Date(b.created_at) - new Date(a.created_at);
-      return new Date(b.updated_at) - new Date(a.updated_at);
-    });
-    return list;
-  }, [docs, search, catFilter, statusFilter, scope, sortBy]);
-
-  const activeFilterCount = (catFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + (search ? 1 : 0);
-
-  const clearFilters = () => { setCatFilter("all"); setStatusFilter("all"); setSearch(""); };
-
   const handleCreate = async (details) => {
-    const newDoc = {
-      id: Date.now().toString(),
-      title: details.title,
-      category: details.category,
-      status: "draft",
-      word_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      share_enabled: false,
-      owner: true,
-    };
-    setDocs((prev) => [newDoc, ...prev]);
-    setCreateOpen(false);
+    try {
+      const newDoc = await apiFetch("/api/v1/content", {
+        method: "POST",
+        body: JSON.stringify({
+          title: details.title,
+          category: details.category,
+          platform: details.platform,
+          custom_category: details.customCategory,
+          brief: details.brief,
+        }),
+      });
+      setCreateOpen(false);
+      await loadDocs();
+    } catch (err) {
+      alert(err.detail || "Failed to create document");
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setDocs((prev) => prev.filter((d) => d.id !== deleteId));
-    setDeleting(false);
-    setDeleteId(null);
+    try {
+      await apiFetch(`/api/v1/content/${deleteId}`, { method: "DELETE" });
+      setDocs((prev) => prev.filter((d) => d.id !== deleteId));
+      setDeleteId(null);
+    } catch (err) {
+      alert(err.detail || "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  const activeFilterCount = (catFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + (search ? 1 : 0);
+  const clearFilters = () => { setCatFilter("all"); setStatusFilter("all"); setSearch(""); };
 
   const categoryCounts = Object.keys(CATEGORY_META).reduce((acc, cat) => {
     acc[cat] = docs.filter((d) => d.category === cat).length;
     return acc;
   }, {});
 
+  const reviewCount = docs.filter((d) => d.assigned_reviewer_id === user?.id && d.owner_id !== user?.id).length;
+
   const SCOPE_TABS = [
     { v: "mine",   label: "My docs" },
-    { v: "review", label: "📥 To review" },
+    { v: "review", label: "📥 To review", badge: reviewCount },
     { v: "shared", label: "🤝 Shared with me" },
     { v: "all",    label: "All" },
   ];
@@ -656,13 +626,11 @@ export default function ContentPage() {
               Content <span className="text-blue-500">studio</span>
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              {filtered.length} of {docs.length} {docs.length === 1 ? "document" : "documents"} · drafts, social posts and website copy.
+              {docs.length} {docs.length === 1 ? "document" : "documents"} · drafts, social posts and website copy.
             </p>
           </div>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 hover:-translate-y-0.5 transition-all"
-          >
+          <button onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 hover:-translate-y-0.5 transition-all">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -678,15 +646,11 @@ export default function ContentPage() {
           const count = categoryCounts[cat] ?? 0;
           const active = catFilter === cat;
           return (
-            <button
-              key={cat}
-              onClick={() => setCatFilter(active ? "all" : cat)}
-              className={cn(
-                "group relative overflow-hidden text-left rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md",
-                active ? "border-blue-300 bg-blue-50 shadow-sm" : "border-gray-100 bg-white hover:border-blue-200"
-              )}
-            >
-              <div className={cn("absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-400 transition-opacity", active ? "opacity-100" : "opacity-0 group-hover:opacity-100")} />
+            <button key={cat} onClick={() => setCatFilter(active ? "all" : cat)}
+              className={cn("group relative overflow-hidden text-left rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md",
+                active ? "border-blue-300 bg-blue-50 shadow-sm" : "border-gray-100 bg-white hover:border-blue-200")}>
+              <div className={cn("absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-400 transition-opacity",
+                active ? "opacity-100" : "opacity-0 group-hover:opacity-100")} />
               <div className="flex items-start justify-between">
                 <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg border transition-transform group-hover:scale-110", meta.color)}>
                   <Icon />
@@ -703,17 +667,17 @@ export default function ContentPage() {
       {/* ── Scope tabs ── */}
       <div className="flex flex-wrap items-center gap-2">
         {SCOPE_TABS.map((t) => (
-          <button
-            key={t.v}
-            onClick={() => setScope(t.v)}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all",
+          <button key={t.v} onClick={() => setScope(t.v)}
+            className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all",
               scope === t.v
                 ? "border-blue-300 bg-blue-50 text-blue-600 shadow-sm"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300"
-            )}
-          >
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300")}>
             {t.label}
+            {t.badge > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -721,72 +685,40 @@ export default function ContentPage() {
       {/* ── Toolbar ── */}
       <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          {/* Search */}
           <div className="relative flex-1 min-w-0">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+            <input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title…"
-              className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm text-gray-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-50"
-            />
+              className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm text-gray-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-50" />
           </div>
-
           <div className="flex flex-wrap items-center gap-2">
-            {/* Any date button */}
             <button className="flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-gray-300 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
               </svg>
               Any date
             </button>
-
-            {/* Status dropdown */}
-            <CustomDropdown
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={STATUS_OPTIONS}
-              width="w-36"
-            />
-
-            {/* Sort dropdown */}
-            <CustomDropdown
-              value={sortBy}
-              onChange={setSortBy}
-              options={SORT_OPTIONS}
-              prefix={
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-                </svg>
-              }
-              width="w-44"
-            />
-
-            {/* View toggle */}
+            <CustomDropdown value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} width="w-36" />
+            <CustomDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS}
+              prefix={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>}
+              width="w-44" />
             <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
-              <button
-                onClick={() => setView("list")}
+              <button onClick={() => setView("list")}
                 className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-                  view === "list" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600"
-                )}
-                title="List view"
-              >
+                  view === "list" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600")} title="List view">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                 </svg>
               </button>
-              <button
-                onClick={() => setView("grid")}
+              <button onClick={() => setView("grid")}
                 className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-                  view === "grid" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600"
-                )}
-                title="Grid view"
-              >
+                  view === "grid" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600")} title="Grid view">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
                   <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
@@ -796,7 +728,6 @@ export default function ContentPage() {
           </div>
         </div>
 
-        {/* Active filter chips */}
         {activeFilterCount > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-3">
             <svg className="text-gray-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -815,8 +746,23 @@ export default function ContentPage() {
 
       {/* ── Doc list / grid ── */}
       <div className={cn("gap-3", view === "list" ? "grid" : "grid sm:grid-cols-2 lg:grid-cols-3")}>
-        {filtered.length === 0 && (
-          <div className={cn(view === "grid" && "sm:col-span-2 lg:col-span-3", "rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-16 text-center")}>
+        {loading && (
+          <>
+            {[1,2,3].map((i) => (
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 flex items-center gap-3 animate-pulse">
+                <div className="h-10 w-10 rounded-lg bg-gray-100 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-1/3 rounded bg-gray-100" />
+                  <div className="h-3 w-1/2 rounded bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {!loading && docs.length === 0 && (
+          <div className={cn(view === "grid" && "sm:col-span-2 lg:col-span-3",
+            "rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-16 text-center")}>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -834,10 +780,8 @@ export default function ContentPage() {
                 Clear filters
               </button>
             ) : (
-              <button
-                onClick={() => setCreateOpen(true)}
-                className="mt-4 flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 mx-auto"
-              >
+              <button onClick={() => setCreateOpen(true)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
@@ -847,7 +791,7 @@ export default function ContentPage() {
           </div>
         )}
 
-        {filtered.map((doc) =>
+        {!loading && docs.map((doc) =>
           view === "list"
             ? <DocRow key={doc.id} doc={doc} onDelete={setDeleteId} />
             : <DocCard key={doc.id} doc={doc} onDelete={setDeleteId} />
@@ -855,18 +799,27 @@ export default function ContentPage() {
       </div>
 
       {/* ── FAB ── */}
-      <button
-              onClick={() => setDrawerOpen(true)}
-              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
-              title="Add a quick task"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-       
-            {/* Quick Task Drawer */}
-            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-          </div>
+      <button onClick={() => setDrawerOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+        title="Add a quick task">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+
+      <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      <NewDocModal open={createOpen} onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
+
+      <DeleteModal open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} deleting={deleting} />
+    </div>
+  );
+}
+
+export default function ContentPage() {
+  return (
+    <ProtectedRoute>
+      <ContentPageContent />
+    </ProtectedRoute>
   );
 }

@@ -1,24 +1,32 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useAuth } from "../../components/client/AuthContext";
+import ProtectedRoute from "../../components/client/ProtectedRoute";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...authHeaders(), ...options.headers } });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
-
-// ─── Date helpers (replacing date-fns) ───────────────────────────────────────
-function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999); }
-function subDays(d, n) { const r = new Date(d); r.setDate(r.getDate() - n); return r; }
 function subMonths(d, n) { const r = new Date(d); r.setMonth(r.getMonth() - n); return r; }
 function fmtMonth(d) { return d.toLocaleDateString("en-US", { month: "short", year: "numeric" }); }
 function fmtMonthFull(d) { return d.toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
 function fmtYM(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
 function fmtDateTime(iso) { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
 
-// ─── XP helpers (replacing @/lib/xp) ─────────────────────────────────────────
+// ─── XP helpers ───────────────────────────────────────────────────────────────
 const LEVEL_THRESHOLDS = [0, 50, 120, 220, 350, 500, 700, 950, 1250, 1600, 2000];
 const LEVEL_TITLES = ["Newcomer","Starter","Explorer","Contributor","Performer","Achiever","Champion","Expert","Elite","Legend","Master"];
-
 function getLevel(xp) {
   let level = 1;
   for (let i = 1; i < LEVEL_THRESHOLDS.length; i++) {
@@ -34,64 +42,16 @@ function getLevel(xp) {
 function getLevelTitle(level) { return LEVEL_TITLES[Math.min(level, 10) - 1] ?? "Newcomer"; }
 
 const EVENT_LABELS = {
-  task_completed:        { label: "Task completed", emoji: "✅" },
-  standup_submitted:     { label: "Daily standup", emoji: "🌅" },
-  eod_submitted:         { label: "EOD report", emoji: "🌇" },
-  checkin_ontime:        { label: "On-time check-in", emoji: "⏰" },
-  weekly_completion:     { label: "Weekly completion bonus", emoji: "🎯" },
-  overdue_penalty:       { label: "Overdue task", emoji: "⏳" },
-  missed_standup:        { label: "Missed standup", emoji: "🚫" },
-  missed_eod:            { label: "Missed EOD", emoji: "🚫" },
-  late_checkin:          { label: "Late check-in", emoji: "⚠️" },
+  task_completed:        { label: "Task completed",         emoji: "✅" },
+  standup_submitted:     { label: "Daily standup",          emoji: "🌅" },
+  eod_submitted:         { label: "EOD report",             emoji: "🌇" },
+  checkin_ontime:        { label: "On-time check-in",       emoji: "⏰" },
+  weekly_completion:     { label: "Weekly completion bonus",emoji: "🎯" },
+  overdue_penalty:       { label: "Overdue task",           emoji: "⏳" },
+  missed_standup:        { label: "Missed standup",         emoji: "🚫" },
+  missed_eod:            { label: "Missed EOD",             emoji: "🚫" },
+  late_checkin:          { label: "Late check-in",          emoji: "⚠️" },
 };
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_USER = { id: "u-1", name: "Sahil", role: "developer" };
-
-const MOCK_PROFILES = [
-  { id: "u-1", name: "Sahil",   email: "sahil@ezsignly.com",   avatar_url: null },
-  { id: "u-2", name: "Amy",     email: "amy@ezsignly.com",     avatar_url: null },
-  { id: "u-3", name: "Ravi",    email: "ravi@ezsignly.com",    avatar_url: null },
-  { id: "u-4", name: "Priya",   email: "priya@ezsignly.com",   avatar_url: null },
-];
-
-const NOW = new Date();
-function mockEvent(id, userId, type, points, daysAgo, reason) {
-  return { id, user_id: userId, event_type: type, points, reason, created_at: subDays(NOW, daysAgo).toISOString() };
-}
-
-const MOCK_EVENTS = [
-  mockEvent("e1",  "u-1", "checkin_ontime",    10,  0,  "On-time check-in"),
-  mockEvent("e2",  "u-1", "weekly_completion",  10,  0,  "Weekly completion 75% (3/4)"),
-  mockEvent("e3",  "u-1", "missed_eod",         -5,  0,  "Missed end-of-day report"),
-  mockEvent("e4",  "u-1", "task_completed",     20,  1,  "Task: Deploy hotfix"),
-  mockEvent("e5",  "u-1", "task_completed",     35,  1,  "Task: Urgent client fix"),
-  mockEvent("e6",  "u-1", "standup_submitted",  5,   2,  "Daily standup"),
-  mockEvent("e7",  "u-1", "task_completed",     10,  2,  "Task: Update docs"),
-  mockEvent("e8",  "u-1", "overdue_penalty",    -5,  3,  "Overdue task penalty"),
-  mockEvent("e9",  "u-1", "task_completed",     20,  4,  "Task: API refactor"),
-  mockEvent("e10", "u-1", "checkin_ontime",     10,  5,  "On-time check-in"),
-  mockEvent("e11", "u-1", "task_completed",     10,  5,  "Task: Fix bug #112"),
-  mockEvent("e12", "u-1", "standup_submitted",  5,   6,  "Daily standup"),
-  mockEvent("e13", "u-1", "task_completed",     35,  6,  "Task: Urgent feature"),
-  mockEvent("e14", "u-1", "missed_standup",     -5,  7,  "Missed standup"),
-  mockEvent("e15", "u-1", "overdue_penalty",    -5,  8,  "Overdue task penalty"),
-  mockEvent("e16", "u-1", "task_completed",     20,  9,  "Task: Refactor auth"),
-  mockEvent("e17", "u-1", "checkin_ontime",     10, 10,  "On-time check-in"),
-  mockEvent("e18", "u-1", "task_completed",     10, 11,  "Task: Write tests"),
-  mockEvent("e19", "u-1", "standup_submitted",  5,  12,  "Daily standup"),
-  mockEvent("e20", "u-1", "task_completed",     20, 13,  "Task: DB optimization"),
-  mockEvent("e21", "u-2", "task_completed",     35,  1,  "Task: Sales demo"),
-  mockEvent("e22", "u-2", "checkin_ontime",     10,  2,  "On-time check-in"),
-  mockEvent("e23", "u-2", "standup_submitted",  5,   3,  "Daily standup"),
-  mockEvent("e24", "u-2", "overdue_penalty",    -5,  4,  "Overdue penalty"),
-  mockEvent("e25", "u-3", "task_completed",     20,  2,  "Task: SEO audit"),
-  mockEvent("e26", "u-3", "standup_submitted",  5,   3,  "Daily standup"),
-  mockEvent("e27", "u-3", "missed_eod",         -5,  5,  "Missed EOD"),
-  mockEvent("e28", "u-4", "checkin_ontime",     10,  1,  "On-time check-in"),
-  mockEvent("e29", "u-4", "task_completed",     10,  2,  "Task: Write article"),
-  mockEvent("e30", "u-4", "standup_submitted",  5,   3,  "Daily standup"),
-];
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function useToast() {
@@ -103,16 +63,13 @@ function useToast() {
   };
   return { toasts, success: m => add(m, "success"), error: m => add(m, "error") };
 }
-
 function ToastContainer({ toasts }) {
   if (!toasts.length) return null;
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 items-center">
       {toasts.map(t => (
         <div key={t.id} className={cn("flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-medium shadow-lg text-white",
-          t.type === "success" ? "bg-emerald-500" : "bg-red-500")}>
-          {t.msg}
-        </div>
+          t.type === "success" ? "bg-emerald-500" : "bg-red-500")}>{t.msg}</div>
       ))}
     </div>
   );
@@ -134,18 +91,15 @@ function AvatarCircle({ src, name, size = "h-9 w-9", textSize = "text-sm" }) {
   );
 }
 
-// ─── Level Badge (inline replacement for LevelBadge) ─────────────────────────
 function LevelBadge({ xp, size = "md" }) {
   const { level } = getLevel(xp);
   const title = getLevelTitle(level);
-  if (size === "sm") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        Lv {level} {title}
-      </span>
-    );
-  }
+  if (size === "sm") return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Lv {level} {title}
+    </span>
+  );
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1 text-sm font-semibold text-white">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -154,7 +108,7 @@ function LevelBadge({ xp, size = "md" }) {
   );
 }
 
-// ─── SVG Icons ────────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 const Icon = {
   Trophy:    (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>,
   Sparkles:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>,
@@ -162,10 +116,9 @@ const Icon = {
   Award:     (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
   Calendar:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   ChevronDown:(p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>,
-  X:         (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
 };
 
-// ─── Card ─────────────────────────────────────────────────────────────────────
+// ─── UI primitives ────────────────────────────────────────────────────────────
 function Card({ children, className = "" }) {
   return <div className={cn("rounded-2xl border border-gray-100 bg-white shadow-sm", className)}>{children}</div>;
 }
@@ -174,8 +127,6 @@ function CardTitle({ children, className = "" }) {
   return <h2 className={cn("text-base font-semibold text-gray-900 flex items-center gap-2", className)}>{children}</h2>;
 }
 function CardContent({ children, className = "" }) { return <div className={cn("px-5 pb-5", className)}>{children}</div>; }
-
-// ─── Badge ────────────────────────────────────────────────────────────────────
 function Badge({ children, variant = "default", className = "" }) {
   const v = {
     default:     "bg-gray-100 text-gray-700 border border-gray-200",
@@ -184,54 +135,41 @@ function Badge({ children, variant = "default", className = "" }) {
     outline:     "bg-white text-gray-600 border border-gray-200",
     positive:    "bg-emerald-50 text-emerald-700 border border-emerald-200",
   };
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", v[variant] || v.default, className)}>
-      {children}
-    </span>
-  );
+  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", v[variant] || v.default, className)}>{children}</span>;
 }
 
-// ─── Custom Select Dropdown ────────────────────────────────────────────────────
+// ─── Custom Select ────────────────────────────────────────────────────────────
 function CustomSelect({ value, onChange, options = [], placeholder = "Select…", className = "" }) {
   const [open, setOpen] = useState(false);
   const [style, setStyle] = useState({});
   const ref = useRef(null);
   const btnRef = useRef(null);
-
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
-
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
-      if (spaceBelow < 220) {
-        setStyle({ position: "fixed", bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, zIndex: 9999 });
-      } else {
-        setStyle({ position: "fixed", top: r.bottom + 4, left: r.left, width: r.width, zIndex: 9999 });
-      }
+      if (spaceBelow < 220) setStyle({ position: "fixed", bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, zIndex: 9999 });
+      else setStyle({ position: "fixed", top: r.bottom + 4, left: r.left, width: r.width, zIndex: 9999 });
     }
     setOpen(o => !o);
   };
-
   const selected = options.find(o => o.value === value);
-
   return (
     <div ref={ref} className={cn("relative", className)}>
       <button ref={btnRef} type="button" onClick={toggle}
-        className={cn("flex h-9 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors",
-          open && "border-blue-400 ring-2 ring-blue-50")}>
+        className={cn("flex h-9 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-colors", open && "border-blue-400 ring-2 ring-blue-50")}>
         <span>{selected?.label ?? placeholder}</span>
         <Icon.ChevronDown className={cn("h-4 w-4 text-gray-400 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
         <div style={style} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg py-1">
           {options.map(opt => (
-            <button key={opt.value} type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
+            <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setOpen(false); }}
               className={cn("flex w-full items-center px-4 py-2.5 text-sm text-left transition-colors",
                 value === opt.value ? "bg-blue-50 text-blue-600 font-medium" : "text-gray-700 hover:bg-gray-50")}>
               {opt.label}
@@ -243,19 +181,17 @@ function CustomSelect({ value, onChange, options = [], placeholder = "Select…"
   );
 }
 
-// ─── Mini popover for breakdown ───────────────────────────────────────────────
+// ─── Breakdown Popover ────────────────────────────────────────────────────────
 function BreakdownPopover({ name, xp, periodLabel, breakdown, recents }) {
   const [open, setOpen] = useState(false);
   const [style, setStyle] = useState({});
   const ref = useRef(null);
   const btnRef = useRef(null);
-
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
-
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
@@ -263,10 +199,7 @@ function BreakdownPopover({ name, xp, periodLabel, breakdown, recents }) {
     }
     setOpen(o => !o);
   };
-
   const { level } = getLevel(xp);
-  const title = getLevelTitle(level);
-
   return (
     <div ref={ref} className="relative inline-block">
       <button ref={btnRef} type="button" onClick={toggle} className="hover:scale-105 transition-transform">
@@ -341,54 +274,47 @@ function Reward({ emoji, label, pts, extra, negative }) {
 }
 
 // ─── Team Fairness Panel ──────────────────────────────────────────────────────
-function TeamFairnessPanel({ profiles, periodLabel }) {
+function TeamFairnessPanel({ rows, periodLabel }) {
   const teamLabel = (t) => ({
     admin: "👑 Admin", sales: "💼 Sales", seo: "🔍 SEO",
     content_writer: "✍️ Content", developer: "💻 Developers", unassigned: "Unassigned",
   }[t] ?? t);
 
-  // Mock team data
-  const rows = useMemo(() => [
-    { team: "developer", members: 1, due: 13, doneOnTime: 11, rate: 85, avgXp: 265 },
-    { team: "unassigned", members: 8, due: 0, doneOnTime: 0, rate: 0, avgXp: 0 },
-  ], []);
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>
-          <Icon.Trophy className="h-4 w-4 text-emerald-500" />
-          Team fairness — completion rate
-        </CardTitle>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Compares teams by % of due tasks completed on time, so a small team isn't penalised for size. Period: {periodLabel}.
-        </p>
+        <CardTitle><Icon.Trophy className="h-4 w-4 text-emerald-500" />Team fairness — completion rate</CardTitle>
+        <p className="text-xs text-gray-500 mt-0.5">Period: {periodLabel}</p>
       </CardHeader>
       <CardContent className="p-0">
-        <ul className="divide-y divide-gray-50">
-          {rows.map((r, i) => (
-            <li key={r.team} className="flex items-center gap-3 px-5 py-4">
-              <span className="w-8 text-center text-xs font-bold text-gray-400">#{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-gray-900 text-sm">{teamLabel(r.team)}</span>
-                  <Badge variant="outline">{r.members} member{r.members === 1 ? "" : "s"}</Badge>
+        {rows.length === 0 ? (
+          <p className="p-5 text-sm text-gray-400">No team data yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-50">
+            {rows.map((r, i) => (
+              <li key={r.team} className="flex items-center gap-3 px-5 py-4">
+                <span className="w-8 text-center text-xs font-bold text-gray-400">#{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 text-sm">{teamLabel(r.team)}</span>
+                    <Badge variant="outline">{r.members} member{r.members === 1 ? "" : "s"}</Badge>
+                  </div>
+                  <div className="h-2 mt-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={cn("h-full rounded-full transition-all",
+                      r.rate >= 80 ? "bg-emerald-500" : r.rate >= 50 ? "bg-amber-500" : "bg-red-400")}
+                      style={{ width: `${r.rate}%` }} />
+                  </div>
+                  <div className="text-[11px] text-gray-400 mt-1">
+                    {r.done_on_time}/{r.due} on-time · avg {r.avg_xp} XP per member
+                  </div>
                 </div>
-                <div className="h-2 mt-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={cn("h-full rounded-full transition-all",
-                    r.rate >= 80 ? "bg-emerald-500" : r.rate >= 50 ? "bg-amber-500" : "bg-red-400")}
-                    style={{ width: `${r.rate}%` }} />
+                <div className="text-right shrink-0">
+                  <div className="text-2xl font-bold text-gray-900 tabular-nums">{r.rate}%</div>
                 </div>
-                <div className="text-[11px] text-gray-400 mt-1">
-                  {r.doneOnTime}/{r.due} on-time · avg {r.avgXp} XP per member
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-2xl font-bold text-gray-900 tabular-nums">{r.rate}%</div>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   );
@@ -397,22 +323,23 @@ function TeamFairnessPanel({ profiles, periodLabel }) {
 // ─── Period tabs ──────────────────────────────────────────────────────────────
 const PERIODS = [
   { value: "current_month", label: "This month" },
-  { value: "7d",            label: "7 days" },
-  { value: "30d",           label: "30 days" },
-  { value: "all",           label: "All time" },
+  { value: "7d",            label: "7 days"      },
+  { value: "30d",           label: "30 days"     },
+  { value: "all",           label: "All time"    },
 ];
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function LeaderboardPage() {
-  const user = MOCK_USER;
-  const isAdmin = user.role === "admin";
+function XPContent() {
+  const { user } = useAuth();
   const toast = useToast();
 
-  const [profiles] = useState(MOCK_PROFILES);
-  const [events] = useState(MOCK_EVENTS);
-  const [loading] = useState(false);
-  const [period, setPeriod] = useState("current_month");
+  const [period, setPeriod]           = useState("current_month");
   const [customMonth, setCustomMonth] = useState(fmtYM(new Date()));
+  const [myXP, setMyXP]               = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [fairness, setFairness]       = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [fairnessLabel, setFairnessLabel] = useState("");
 
   const monthOptions = useMemo(() => {
     const now = new Date();
@@ -422,79 +349,43 @@ export default function LeaderboardPage() {
     });
   }, []);
 
-  const range = useMemo(() => {
-    const now = new Date();
-    if (period === "all") return null;
-    if (period === "7d") return { from: subDays(now, 7), to: now };
-    if (period === "30d") return { from: subDays(now, 30), to: now };
-    if (period === "current_month") return { from: startOfMonth(now), to: endOfMonth(now) };
-    const [y, m] = customMonth.split("-").map(Number);
-    const d = new Date(y, m - 1, 1);
-    return { from: startOfMonth(d), to: endOfMonth(d) };
-  }, [period, customMonth]);
-
-  const filteredEvents = useMemo(() => {
-    if (!range) return events;
-    return events.filter(e => {
-      const d = new Date(e.created_at);
-      return d >= range.from && d <= range.to;
-    });
-  }, [events, range]);
-
-  const totals = useMemo(() => {
-    const m = {};
-    filteredEvents.forEach(e => { m[e.user_id] = (m[e.user_id] ?? 0) + e.points; });
-    return m;
-  }, [filteredEvents]);
-
-  const allTimeTotals = useMemo(() => {
-    const m = {};
-    events.forEach(e => { m[e.user_id] = (m[e.user_id] ?? 0) + e.points; });
-    return m;
-  }, [events]);
-
-  const ranked = useMemo(() => {
-    return profiles
-      .map(p => ({ ...p, periodXp: totals[p.id] ?? 0, totalXp: allTimeTotals[p.id] ?? 0 }))
-      .sort((a, b) => b.periodXp - a.periodXp || b.totalXp - a.totalXp);
-  }, [profiles, totals, allTimeTotals]);
-
-  const breakdown = useMemo(() => {
-    const m = {};
-    filteredEvents.forEach(e => {
-      m[e.user_id] ??= {};
-      m[e.user_id][e.event_type] ??= { points: 0, count: 0 };
-      m[e.user_id][e.event_type].points += e.points;
-      m[e.user_id][e.event_type].count += 1;
-    });
-    return m;
-  }, [filteredEvents]);
-
-  const recentByUser = useMemo(() => {
-    const m = {};
-    filteredEvents.forEach(e => {
-      m[e.user_id] ??= [];
-      if (m[e.user_id].length < 8) m[e.user_id].push(e);
-    });
-    return m;
-  }, [filteredEvents]);
-
-  const myAllTime = allTimeTotals[user.id] ?? 0;
-  const myPeriod = totals[user.id] ?? 0;
-  const myEvents = filteredEvents.filter(e => e.user_id === user.id).slice(0, 30);
-  const me = getLevel(myPeriod);
-
   const periodLabel = period === "all" ? "All time"
     : period === "7d" ? "Last 7 days"
     : period === "30d" ? "Last 30 days"
     : period === "current_month" ? fmtMonthFull(new Date())
     : monthOptions.find(m => m.value === customMonth)?.label ?? customMonth;
 
+  // Build query string
+  const qs = (extra = {}) => {
+    const params = new URLSearchParams({ period, ...extra });
+    if (period === "custom_month") params.set("custom_month", customMonth);
+    return params.toString();
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      apiFetch(`/api/v1/xp/me?${qs()}`),
+      apiFetch(`/api/v1/xp/leaderboard?${qs()}`),
+      apiFetch(`/api/v1/xp/team-fairness?${qs()}`),
+    ])
+      .then(([me, lb, tf]) => {
+        setMyXP(me);
+        setLeaderboard(lb.entries ?? []);
+        setFairness(tf.rows ?? []);
+        setFairnessLabel(tf.period_label ?? "");
+      })
+      .catch(err => toast.error(err.detail || "Failed to load XP data"))
+      .finally(() => setLoading(false));
+  }, [period, customMonth]);
+
+  const me = myXP ? getLevel(myXP.period_xp) : { level: 1, progress: 0, toNext: 50 };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
       <ToastContainer toasts={toast.toasts} />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2 text-gray-900">
@@ -503,8 +394,6 @@ export default function LeaderboardPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Earn points across every team — tasks, standups, attendance, and deals.</p>
         </div>
-
-        {/* Period tabs */}
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1 gap-0.5">
             {PERIODS.map(p => (
@@ -514,68 +403,60 @@ export default function LeaderboardPage() {
                 {p.label}
               </button>
             ))}
-            {isAdmin && (
-              <button onClick={() => setPeriod("custom_month")}
-                className={cn("flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
-                  period === "custom_month" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
-                <Icon.Calendar className="h-3 w-3" />Pick month
-              </button>
-            )}
+            <button onClick={() => setPeriod("custom_month")}
+              className={cn("flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                period === "custom_month" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+              <Icon.Calendar className="h-3 w-3" />Pick month
+            </button>
           </div>
-          {period === "custom_month" && isAdmin && (
+          {period === "custom_month" && (
             <CustomSelect value={customMonth} onChange={setCustomMonth} options={monthOptions} className="w-40" />
           )}
         </div>
       </div>
 
-      {/* ── My XP Card ── */}
-      <div className="overflow-hidden rounded-2xl border-2 border-purple-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-amber-50 p-6">
-          <div className="flex flex-wrap items-center gap-6 justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-white text-3xl font-extrabold shadow-xl ring-4 ring-white">
-                  {me.level}
+      {/* My XP Card */}
+      {myXP && (
+        <div className="overflow-hidden rounded-2xl border-2 border-purple-100 shadow-sm">
+          <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-amber-50 p-6">
+            <div className="flex flex-wrap items-center gap-6 justify-between">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-white text-3xl font-extrabold shadow-xl ring-4 ring-white">
+                    {me.level}
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-amber-600 border border-amber-300 shadow">/10</div>
                 </div>
-                <div className="absolute -bottom-1 -right-1 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-amber-600 border border-amber-300 shadow">
-                  /10
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-semibold">Your level · {periodLabel}</div>
+                  <div className="text-2xl font-extrabold text-gray-900">{getLevelTitle(me.level)}</div>
+                  <div className="text-sm text-gray-500">
+                    {myXP.period_xp} XP this period · {me.level >= 10 ? "Max level reached 🏆" : `${me.toNext} XP to next`}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">All-time XP: <span className="font-semibold text-gray-700">{myXP.total_xp}</span></div>
                 </div>
               </div>
-              <div>
-                <div className="text-xs uppercase tracking-wider text-gray-400 font-semibold">Your level · {periodLabel}</div>
-                <div className="text-2xl font-extrabold text-gray-900">{getLevelTitle(me.level)}</div>
-                <div className="text-sm text-gray-500">
-                  {myPeriod} XP this period · {me.level >= 10 ? "Max level reached 🏆" : `${me.toNext} XP to next`}
+              <div className="flex-1 min-w-[220px] max-w-md">
+                <div className="flex justify-between text-xs font-medium text-gray-400 mb-1">
+                  <span>Level {me.level}</span>
+                  <span>{me.level >= 10 ? "MAX" : `Level ${me.level + 1}`}</span>
                 </div>
-                <div className="text-xs text-gray-400 mt-1">All-time XP: <span className="font-semibold text-gray-700">{myAllTime}</span></div>
-              </div>
-            </div>
-            <div className="flex-1 min-w-[220px] max-w-md">
-              <div className="flex justify-between text-xs font-medium text-gray-400 mb-1">
-                <span>Level {me.level}</span>
-                <span>{me.level >= 10 ? "MAX" : `Level ${me.level + 1}`}</span>
-              </div>
-              <div className="h-4 bg-white/60 rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 transition-all rounded-full"
-                  style={{ width: `${me.progress}%` }} />
-              </div>
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>{me.progress}%</span>
-                <span>Resets monthly</span>
+                <div className="h-4 bg-white/60 rounded-full overflow-hidden shadow-inner">
+                  <div className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 transition-all rounded-full" style={{ width: `${me.progress}%` }} />
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>{me.progress}%</span>
+                  <span>Resets monthly</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ── How to earn XP ── */}
+      {/* How to earn */}
       <Card>
-        <CardHeader>
-          <CardTitle>
-            <Icon.Sparkles className="h-4 w-4 text-blue-500" />
-            How to earn XP
-          </CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle><Icon.Sparkles className="h-4 w-4 text-blue-500" />How to earn XP</CardTitle></CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             <Reward emoji="✅" label="Task by priority" pts="+5 / +10 / +20 / +35" extra="low → urgent (effort-weighted)" />
@@ -590,90 +471,74 @@ export default function LeaderboardPage() {
         </CardContent>
       </Card>
 
-      {/* ── Team Fairness ── */}
-      <TeamFairnessPanel profiles={profiles} periodLabel={periodLabel} />
+      {/* Team Fairness */}
+      <TeamFairnessPanel rows={fairness} periodLabel={fairnessLabel || periodLabel} />
 
-      {/* ── How you lose XP ── */}
+      {/* How you lose XP */}
       <Card className="border-red-100">
-        <CardHeader>
-          <CardTitle>
-            <span className="text-amber-500">⚠️</span> How you lose XP
-          </CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle><span className="text-amber-500">⚠️</span> How you lose XP</CardTitle></CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             <Reward negative emoji="⏳" label="Overdue task" pts="−2/day" extra="high/urgent only · capped at −20" />
             <Reward negative emoji="🚫" label="Missed standup" pts="−5" extra="working day, after 9pm cutoff" />
             <Reward negative emoji="🚫" label="Missed EOD" pts="−5" extra="working day, after 9pm cutoff" />
-            <Reward negative emoji="⚠️" label="Late check-in" pts="0 / −5 / −10" extra="1st free · 2nd −5 · 3rd+ −10 (per week, after 15-min grace)" />
+            <Reward negative emoji="⚠️" label="Late check-in" pts="0 / −5 / −10" extra="1st free · 2nd −5 · 3rd+ −10" />
           </div>
         </CardContent>
       </Card>
 
-      {/* ── Leaderboard + My Recent ── */}
+      {/* Leaderboard + My Recent */}
       <div className="grid gap-4 lg:grid-cols-3">
-
-        {/* Leaderboard */}
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle>
-              <Icon.TrendingUp className="h-4 w-4 text-gray-600" />
-              Your ranking
-            </CardTitle>
+            <CardTitle><Icon.TrendingUp className="h-4 w-4 text-gray-600" />Your ranking</CardTitle>
             <span className="text-xs text-gray-400">{periodLabel}</span>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
               <p className="p-5 text-sm text-gray-400">Loading...</p>
-            ) : ranked.length === 0 ? (
+            ) : leaderboard.length === 0 ? (
               <p className="p-5 text-sm text-gray-400">No XP earned yet.</p>
             ) : (
               <ul className="divide-y divide-gray-50">
-                {ranked.map((p, i) => {
-                  const isMe = p.id === user.id;
-                  const userBreakdown = breakdown[p.id] ?? {};
-                  const recents = recentByUser[p.id] ?? [];
+                {leaderboard.map((p, i) => {
+                  const isMe = p.id === user?.id;
                   return (
                     <li key={p.id} className={cn("flex items-center gap-3 px-5 py-3", isMe && "bg-blue-50/50")}>
-                      <AvatarCircle src={p.avatar_url} name={p.name} size="h-9 w-9" />
+                      <span className="w-6 text-center text-xs font-bold text-gray-400">#{i + 1}</span>
+                      <AvatarCircle name={p.full_name || p.username} size="h-9 w-9" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-900 text-sm">
-                            {p.name}
+                            {p.full_name || p.username}
                             {isMe && <span className="text-xs text-blue-500"> (you)</span>}
                           </span>
                           <BreakdownPopover
-                            name={p.name}
-                            xp={p.periodXp}
+                            name={p.full_name || p.username}
+                            xp={p.period_xp}
                             periodLabel={periodLabel}
-                            breakdown={userBreakdown}
-                            recents={recents}
+                            breakdown={p.breakdown ?? {}}
+                            recents={p.recents ?? []}
                           />
                         </div>
-                        {/* Breakdown mini chips */}
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {Object.entries(userBreakdown)
+                          {Object.entries(p.breakdown ?? {})
                             .sort((a, b) => Math.abs(b[1].points) - Math.abs(a[1].points))
                             .slice(0, 5)
                             .map(([type, b]) => {
                               const meta = EVENT_LABELS[type] ?? { emoji: "⭐" };
                               return (
-                                <span key={type} className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded" title={meta.label}>
-                                  {meta.emoji} {b.count}×{" "}
-                                  <span className={b.points < 0 ? "text-red-500" : ""}>
-                                    ({b.points > 0 ? "+" : ""}{b.points})
-                                  </span>
+                                <span key={type} className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  {meta.emoji} {b.count}× <span className={b.points < 0 ? "text-red-500" : ""}>({b.points > 0 ? "+" : ""}{b.points})</span>
                                 </span>
                               );
                             })}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-lg font-bold text-gray-900 tabular-nums">
-                          {p.periodXp > 0 ? "+" : ""}{p.periodXp}
-                        </div>
+                        <div className="text-lg font-bold text-gray-900 tabular-nums">{p.period_xp > 0 ? "+" : ""}{p.period_xp}</div>
                         <div className="text-[10px] text-gray-400 uppercase">period</div>
-                        <div className="text-[10px] text-gray-400 tabular-nums">total {p.totalXp}</div>
+                        <div className="text-[10px] text-gray-400 tabular-nums">total {p.total_xp}</div>
                       </div>
                     </li>
                   );
@@ -686,17 +551,14 @@ export default function LeaderboardPage() {
         {/* My recent XP */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>
-              <Icon.Award className="h-4 w-4 text-gray-600" />
-              My recent XP
-            </CardTitle>
+            <CardTitle><Icon.Award className="h-4 w-4 text-gray-600" />My recent XP</CardTitle>
           </CardHeader>
           <CardContent className="p-0 max-h-[500px] overflow-y-auto">
-            {myEvents.length === 0 ? (
+            {!myXP || myXP.recent_events.length === 0 ? (
               <p className="p-5 text-sm text-gray-400">No XP yet. Complete a task or check in on time!</p>
             ) : (
               <ul className="divide-y divide-gray-50">
-                {myEvents.map(e => {
+                {myXP.recent_events.map(e => {
                   const meta = EVENT_LABELS[e.event_type] ?? { label: e.event_type, emoji: "⭐" };
                   return (
                     <li key={e.id} className="flex items-start gap-2.5 px-5 py-3 text-sm">
@@ -717,5 +579,13 @@ export default function LeaderboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <ProtectedRoute>
+      <XPContent />
+    </ProtectedRoute>
   );
 }

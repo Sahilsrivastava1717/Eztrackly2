@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "./AuthContext";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: (
@@ -260,6 +261,7 @@ function Navbar({ collapsed, onToggle }) {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({ collapsed, onLogoutClick }) {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <aside style={{
@@ -318,7 +320,7 @@ function Sidebar({ collapsed, onLogoutClick }) {
           <>
             <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
               <div style={{ position: "relative", width: 32, height: 32, borderRadius: "50%", background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                S
+                {(user?.full_name || user?.username || "?")[0].toUpperCase()}
                 <span style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }}/>
               </div>
             </div>
@@ -335,12 +337,16 @@ function Sidebar({ collapsed, onLogoutClick }) {
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10 }}>
               <div style={{ position: "relative", width: 36, height: 36, borderRadius: "50%", background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                S
+                {(user?.full_name || user?.username || "?")[0].toUpperCase()}
                 <span style={{ position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }}/>
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>Sahil</div>
-                <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.2 }}>Developer</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>
+                  {user?.full_name || user?.username || "User"}
+                </div>
+                <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.2 }}>
+                  {user?.role || "Member"}
+                </div>
               </div>
             </div>
             <button

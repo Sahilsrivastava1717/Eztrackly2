@@ -1,7 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers },
+  });
+  if (!res.ok) throw await res.json();
+  if (res.status === 204) return null;
+  return res.json();
+}
 
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
@@ -49,12 +69,10 @@ function NoteCard({ note, onUpdate, onDelete }) {
           className="mt-0.5 shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
         >
           {note.pinned ? (
-            /* Filled pin */
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" className="text-gray-700">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
             </svg>
           ) : (
-            /* Unpin / pin-off icon matching the reference image */
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-gray-400">
               <line x1="2" y1="2" x2="22" y2="22"/>
               <path d="M16.5 16.5L12 21l-7-7 4.5-4.5"/>
@@ -88,7 +106,6 @@ function NoteCard({ note, onUpdate, onDelete }) {
           {COLOR_KEYS.map((c, i) => {
             const isActive = note.color === c;
             const swatchColor = COLORS[c].swatch;
-            // First swatch (yellow/active default) shows as dark outlined circle matching reference
             return (
               <button
                 key={c}
@@ -133,16 +150,23 @@ export default function NotesPage() {
   const [notes, setNotes] = useState([]);
   const [search, setSearch] = useState("");
 
-  const create = () => {
-    const newNote = {
-      id: Date.now().toString(),
-      title: "Untitled",
-      content: "",
-      color: "yellow",
-      pinned: false,
-      updated_at: new Date().toISOString(),
-    };
-    setNotes((prev) => [newNote, ...prev]);
+  // Load notes from backend on mount
+  useEffect(() => {
+    apiFetch("/api/v1/notes")
+      .then((data) => setNotes(data.notes ?? []))
+      .catch(console.error);
+  }, []);
+
+  const create = async () => {
+    try {
+      const newNote = await apiFetch("/api/v1/notes", {
+        method: "POST",
+        body: JSON.stringify({ title: "Untitled", content: "", color: "yellow", pinned: false }),
+      });
+      setNotes((prev) => [newNote, ...prev]);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const update = (id, patch) => {
@@ -151,11 +175,25 @@ export default function NotesPage() {
         n.id === id ? { ...n, ...patch, updated_at: new Date().toISOString() } : n
       )
     );
+    // Debounced auto-save
+    clearTimeout(window.__noteSaveTimer?.[id]);
+    if (!window.__noteSaveTimer) window.__noteSaveTimer = {};
+    window.__noteSaveTimer[id] = setTimeout(() => {
+      apiFetch(`/api/v1/notes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      }).catch(console.error);
+    }, 800);
   };
 
-  const remove = (id) => {
+  const remove = async (id) => {
     if (!window.confirm("Delete this note?")) return;
-    setNotes((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await apiFetch(`/api/v1/notes/${id}`, { method: "DELETE" });
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const filtered = notes
@@ -176,7 +214,6 @@ export default function NotesPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2.5 text-2xl font-bold text-gray-900">
-              {/* Sticky note / file icon matching reference */}
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
@@ -235,17 +272,17 @@ export default function NotesPage() {
 
       {/* ── FAB ── */}
       <button
-              onClick={() => setDrawerOpen(true)}
-              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
-              title="Add a quick task"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-       
-            {/* Quick Task Drawer */}
-            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-          </div>
+        onClick={() => setDrawerOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+        title="Add a quick task"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+
+      {/* Quick Task Drawer */}
+      <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </div>
   );
 }

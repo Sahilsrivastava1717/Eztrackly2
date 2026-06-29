@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useTasks, isToday, isOverdue, PRIO_COLORS, STATUS_META, friendlyDate } from "../../components/client/TaskContext";
+import { useAuth } from "../../components/client/AuthContext";
 import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
+import ProtectedRoute from "../../components/client/ProtectedRoute";
 
 function greet() {
   const h = new Date().getHours();
@@ -36,7 +38,6 @@ function Badge({ children, className = "" }) {
 function StatCard({ label, value, gradient, icon }) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 hover:border-gray-200">
-      {/* Gradient top border — fades in on hover */}
       <div className={cn(
         "absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r opacity-0 transition-opacity duration-300 group-hover:opacity-100",
         gradient
@@ -55,18 +56,20 @@ function StatCard({ label, value, gradient, icon }) {
   );
 }
 
-export default function DeveloperDashboard() {
+function DashboardContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { tasks } = useTasks();
+  const { user, logout } = useAuth();
 
-  const myTasks = tasks.filter((t) => t.assigned_to === "self");
+  // Use all tasks (they're already filtered by user on the backend)
+  const myTasks = tasks;
 
   const total      = myTasks.length;
   const pending    = myTasks.filter((t) => t.status === "pending").length;
   const inProgress = myTasks.filter((t) => t.status === "in_progress").length;
   const completed  = myTasks.filter((t) => t.status === "done").length;
   const backlog    = myTasks.filter((t) => isOverdue(t)).length;
-  
+
   const now = new Date();
   const dueToday = myTasks.filter(
     (t) => t.status !== "done" && t.status !== "cancelled" && isToday(t.due_date)
@@ -78,6 +81,9 @@ export default function DeveloperDashboard() {
     .slice(0, 6);
 
   const recentDone = myTasks.filter((t) => t.status === "done").slice(0, 5);
+
+  // Display name from auth
+  const displayName = user?.full_name?.split(" ")[0] || user?.username || "there";
 
   const statCards = [
     {
@@ -111,7 +117,7 @@ export default function DeveloperDashboard() {
     <div className="min-h-screen w-full bg-transparent">
       <div className="mx-auto max-w-7xl space-y-5 px-3 py-6">
 
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">
@@ -119,7 +125,7 @@ export default function DeveloperDashboard() {
             </p>
             <h1 className="mt-1 flex flex-wrap items-center gap-2 text-3xl font-bold tracking-tight text-gray-900">
               {greet()},{" "}
-              <span className="text-blue-500">Sahil</span>
+              <span className="text-blue-500">{displayName}</span>
               <span>👋</span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
@@ -136,35 +142,47 @@ export default function DeveloperDashboard() {
             </p>
           </div>
 
-          {/* Open my tasks — compact button top-right */}
-          <Link
-            href="/myTasks"
-            className="flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-600 hover:-translate-y-0.5 whitespace-nowrap"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
-              <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
-              <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-            Open my tasks
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/myTasks"
+              className="flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-600 hover:-translate-y-0.5 whitespace-nowrap"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+              Open my tasks
+            </Link>
+
+            {/* Logout button */}
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-all hover:bg-gray-50 hover:text-red-500 whitespace-nowrap"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Logout
+            </button>
+          </div>
         </div>
 
-        {/* ── Stat cards ─────────────────────────────────────────────────────── */}
+        {/* ── Stat cards ── */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {statCards.map((s) => <StatCard key={s.label} {...s} />)}
         </div>
 
-        {/* ── Due today + Upcoming ───────────────────────────────────────────── */}
+        {/* ── Due today + Upcoming ── */}
         <div className="grid gap-5 lg:grid-cols-2">
-          {/* Due today */}
           <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div className="flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
                   <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
                   <line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
                 <h3 className="font-semibold text-gray-900">Due today</h3>
@@ -202,7 +220,6 @@ export default function DeveloperDashboard() {
             </div>
           </div>
 
-          {/* Upcoming */}
           <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div className="flex items-center gap-2">
@@ -236,7 +253,7 @@ export default function DeveloperDashboard() {
           </div>
         </div>
 
-        {/* ── Recently completed ─────────────────────────────────────────────── */}
+        {/* ── Recently completed ── */}
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div className="flex items-center gap-2">
@@ -283,9 +300,16 @@ export default function DeveloperDashboard() {
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
       </button>
- 
-      {/* Quick Task Drawer */}
+
       <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
+  );
+}
+
+export default function DeveloperDashboard() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   );
 }

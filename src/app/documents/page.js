@@ -1,7 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
+import { useAuth } from "../../components/client/AuthContext";
+import ProtectedRoute from "../../components/client/ProtectedRoute";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers },
+  });
+  if (!res.ok) throw await res.json();
+  if (res.status === 204) return null;
+  return res.json();
+}
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 function fmtDate(d) {
@@ -14,7 +33,7 @@ function isNew(d) {
   return diffHours(new Date(), new Date(d.created_at)) < 48;
 }
 
-// ── icons (inline svg) ────────────────────────────────────────────────────────
+// ── icons ─────────────────────────────────────────────────────────────────────
 function IconLink() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,16 +112,6 @@ function IconSparkle() {
     </svg>
   );
 }
-function IconAI() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l2.4 7.6H22l-6.2 4.5 2.4 7.6L12 17.2l-6.2 4.5 2.4-7.6L2 9.6h7.6z"/>
-    </svg>
-  );
-}
-
-// ── mock data (replace with real Supabase fetches) ────────────────────────────
-const MOCK_DOCS = [];
 
 // ── custom select ─────────────────────────────────────────────────────────────
 function CustomSelect({ value, onChange, options }) {
@@ -159,33 +168,32 @@ function CustomSelect({ value, onChange, options }) {
 }
 
 // ── modal ─────────────────────────────────────────────────────────────────────
-function Modal({ open, onClose, onSave, submitting }) {
-  const [title, setTitle]       = useState("");
-  const [desc,  setDesc]        = useState("");
-  const [link,  setLink]        = useState("");
-  const [file,  setFile]        = useState(null);
+function Modal({ open, onClose, onSaveFile, onSaveLink, submitting }) {
+  const [title, setTitle] = useState("");
+  const [desc,  setDesc]  = useState("");
+  const [link,  setLink]  = useState("");
+  const [file,  setFile]  = useState(null);
 
   if (!open) return null;
 
   const handleSave = () => {
     if (!title.trim()) { alert("Title is required"); return; }
     if (!file && !link.trim()) { alert("Provide a file or a link"); return; }
-    onSave({ title, desc, link, file });
+    if (file) onSaveFile({ title, desc, file });
+    else onSaveLink({ title, desc, link });
   };
 
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 100,
       background: "rgba(0,0,0,0.45)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 16
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16
     }}>
       <div style={{
         background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560,
         padding: "28px 28px 24px", position: "relative",
         boxShadow: "0 20px 60px rgba(0,0,0,.18)"
       }}>
-        {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
           <span style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>Add a document or link</span>
           <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: "#6b7280", padding: 4, borderRadius: 6 }}>
@@ -193,7 +201,6 @@ function Modal({ open, onClose, onSave, submitting }) {
           </button>
         </div>
 
-        {/* Title */}
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block", marginBottom: 6 }}>Title *</label>
           <input
@@ -203,24 +210,13 @@ function Modal({ open, onClose, onSave, submitting }) {
             style={{
               width: "100%", padding: "10px 14px", borderRadius: 8,
               border: "1.5px solid #2563eb", fontSize: 14, outline: "none",
-              boxSizing: "border-box", color: "#111827",
-              boxShadow: "0 0 0 3px #dbeafe"
+              boxSizing: "border-box", color: "#111827", boxShadow: "0 0 0 3px #dbeafe"
             }}
           />
         </div>
 
-        {/* Description */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Description</label>
-            <button style={{
-              display: "flex", alignItems: "center", gap: 5,
-              fontSize: 12, color: "#6b7280", border: "none", background: "none",
-              cursor: "pointer", fontWeight: 500
-            }}>
-              <IconAI /> AI refine
-            </button>
-          </div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block", marginBottom: 6 }}>Description</label>
           <textarea
             value={desc}
             onChange={e => setDesc(e.target.value)}
@@ -233,20 +229,15 @@ function Modal({ open, onClose, onSave, submitting }) {
           />
         </div>
 
-        {/* File */}
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block", marginBottom: 6 }}>
             File (PDF, DOCX, XLSX, image, etc.)
           </label>
-          <div style={{
-            border: "1.5px solid #e5e7eb", borderRadius: 8, padding: "9px 14px",
-            fontSize: 14, color: "#374151", background: "#fafafa"
-          }}>
+          <div style={{ border: "1.5px solid #e5e7eb", borderRadius: 8, padding: "9px 14px", fontSize: 14, color: "#374151", background: "#fafafa" }}>
             <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} style={{ fontSize: 14 }} />
           </div>
         </div>
 
-        {/* Link */}
         <div style={{ marginBottom: 24 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: "#111827", display: "block", marginBottom: 6 }}>
             Or Link (Google Docs, Sheets, Drive, etc.)
@@ -263,28 +254,11 @@ function Modal({ open, onClose, onSave, submitting }) {
           />
         </div>
 
-        {/* Footer */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button
-            onClick={onClose}
-            disabled={submitting}
-            style={{
-              padding: "9px 22px", borderRadius: 8, border: "1.5px solid #e5e7eb",
-              background: "#fff", fontSize: 14, fontWeight: 600,
-              color: "#374151", cursor: "pointer"
-            }}
-          >
+          <button onClick={onClose} disabled={submitting} style={{ padding: "9px 22px", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={submitting}
-            style={{
-              padding: "9px 28px", borderRadius: 8, border: "none",
-              background: "#2563eb", color: "#fff", fontSize: 14,
-              fontWeight: 600, cursor: "pointer"
-            }}
-          >
+          <button onClick={handleSave} disabled={submitting} style={{ padding: "9px 28px", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
             {submitting ? "Saving..." : "Save"}
           </button>
         </div>
@@ -294,101 +268,64 @@ function Modal({ open, onClose, onSave, submitting }) {
 }
 
 // ── document card ─────────────────────────────────────────────────────────────
-function DocCard({ doc, isAdmin, userId, onDelete }) {
+function DocCard({ doc, currentUserId, onDelete }) {
   const newDoc = isNew(doc);
+  const canDelete = doc.uploaded_by === currentUserId;
+  const fileUrl = doc.file_url ? `${API_BASE}${doc.file_url}` : null;
+
   return (
     <div style={{
       background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14,
       padding: "20px 20px 16px", display: "flex", flexDirection: "column", gap: 10,
       boxShadow: "0 1px 3px rgba(0,0,0,.04)"
     }}>
-      {/* Title row */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {doc.file_url ? <IconFile /> : <IconLink />}
           <span style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{doc.title}</span>
           {newDoc && (
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 3,
-              fontSize: 10, fontWeight: 700, color: "#2563eb",
-              background: "#eff6ff", borderRadius: 999, padding: "2px 8px"
-            }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#2563eb", background: "#eff6ff", borderRadius: 999, padding: "2px 8px" }}>
               <IconSparkle /> NEW
             </span>
           )}
         </div>
-        {(isAdmin || doc.uploaded_by === userId) && (
-          <button
-            onClick={() => onDelete(doc)}
-            style={{ border: "none", background: "none", cursor: "pointer", padding: 4, borderRadius: 6, flexShrink: 0 }}
-          >
+        {canDelete && (
+          <button onClick={() => onDelete(doc)} style={{ border: "none", background: "none", cursor: "pointer", padding: 4, borderRadius: 6, flexShrink: 0 }}>
             <IconTrash />
           </button>
         )}
       </div>
 
-      {/* Description */}
       {doc.description && (
-        <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.55, margin: 0,
-          display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.55, margin: 0, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
           {doc.description}
         </p>
       )}
 
-      {/* Badges */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {doc.file_type && (
-          <span style={{
-            fontSize: 11, background: "#f3f4f6", color: "#374151",
-            borderRadius: 6, padding: "3px 9px", fontWeight: 500
-          }}>{doc.file_type}</span>
+          <span style={{ fontSize: 11, background: "#f3f4f6", color: "#374151", borderRadius: 6, padding: "3px 9px", fontWeight: 500 }}>{doc.file_type}</span>
         )}
         {doc.link_url && (
-          <span style={{
-            fontSize: 11, border: "1px solid #e5e7eb", color: "#374151",
-            borderRadius: 6, padding: "3px 9px", fontWeight: 500, background: "#fff"
-          }}>Link</span>
+          <span style={{ fontSize: 11, border: "1px solid #e5e7eb", color: "#374151", borderRadius: 6, padding: "3px 9px", fontWeight: 500, background: "#fff" }}>Link</span>
         )}
       </div>
 
-      {/* Meta */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        fontSize: 12, color: "#9ca3af", marginTop: "auto", paddingTop: 4
-      }}>
-        <span>By {doc.uploader?.name || "Unknown"}</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#9ca3af", marginTop: "auto", paddingTop: 4 }}>
+        <span>By {doc.uploader_name || "Unknown"}</span>
         <span>{fmtDate(doc.created_at)}</span>
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 8 }}>
-        {doc.file_url && (
-          <a
-            href={doc.file_url}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 5, padding: "8px 0", borderRadius: 8, border: "1.5px solid #e5e7eb",
-              fontSize: 13, fontWeight: 600, color: "#374151", textDecoration: "none",
-              background: "#fff"
-            }}
-          >
+        {fileUrl && (
+          <a href={`${fileUrl}?token=${localStorage.getItem("token")}`} target="_blank" rel="noreferrer"
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#374151", textDecoration: "none", background: "#fff" }}>
             <IconDownload /> Download
           </a>
         )}
         {doc.link_url && (
-          <a
-            href={doc.link_url}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 5, padding: "8px 0", borderRadius: 8, border: "1.5px solid #e5e7eb",
-              fontSize: 13, fontWeight: 600, color: "#374151", textDecoration: "none",
-              background: "#fff"
-            }}
-          >
+          <a href={doc.link_url} target="_blank" rel="noreferrer"
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 13, fontWeight: 600, color: "#374151", textDecoration: "none", background: "#fff" }}>
             <IconExternal /> Open
           </a>
         )}
@@ -398,60 +335,93 @@ function DocCard({ doc, isAdmin, userId, onDelete }) {
 }
 
 // ── page ──────────────────────────────────────────────────────────────────────
-export default function DocumentsPage() {
-  // Replace with real auth/role from your context
+function DocumentsContent() {
+  const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const isAdmin = true;
-  const userId  = "mock-user-id";
-
-  const [docs,       setDocs]       = useState(MOCK_DOCS);
-  const [loading,    setLoading]    = useState(false);
+  const [docs,       setDocs]       = useState([]);
+  const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortBy,     setSortBy]     = useState("newest");
   const [modalOpen,  setModalOpen]  = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // ── handlers ──────────────────────────────────────────────────────────────
-  const handleDelete = (doc) => {
-    if (!confirm(`Delete "${doc.title}"?`)) return;
-    setDocs(prev => prev.filter(d => d.id !== doc.id));
-  };
+  // Load documents on mount
+  useEffect(() => {
+    apiFetch("/api/v1/documents")
+      .then(data => setDocs(data.documents ?? []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleSave = ({ title, desc, link, file }) => {
+  // Upload file
+  const handleSaveFile = async ({ title, desc, file }) => {
     setSubmitting(true);
-    setTimeout(() => {
-      const newDoc = {
-        id:          Date.now().toString(),
-        title:       title.trim(),
-        description: desc.trim() || null,
-        file_url:    file ? URL.createObjectURL(file) : null,
-        link_url:    link.trim() || null,
-        file_type:   file ? (file.type || file.name.split(".").pop()) : null,
-        file_name:   file ? file.name : null,
-        uploaded_by: userId,
-        created_at:  new Date().toISOString(),
-        uploader:    { name: "You", avatar_url: null },
-      };
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("title", title);
+      if (desc) formData.append("description", desc);
+      formData.append("file", file);
+
+      const res = await fetch(`${API_BASE}/api/v1/documents/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw await res.json();
+      const newDoc = await res.json();
       setDocs(prev => [newDoc, ...prev]);
       setModalOpen(false);
+    } catch (err) {
+      alert(err.detail || "Upload failed");
+    } finally {
       setSubmitting(false);
-    }, 600);
+    }
   };
 
-  // ── filter + sort ─────────────────────────────────────────────────────────
+  // Save link
+  const handleSaveLink = async ({ title, desc, link }) => {
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("title", title);
+      if (desc) formData.append("description", desc);
+      formData.append("link_url", link);
+
+      const res = await fetch(`${API_BASE}/api/v1/documents/link`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw await res.json();
+      const newDoc = await res.json();
+      setDocs(prev => [newDoc, ...prev]);
+      setModalOpen(false);
+    } catch (err) {
+      alert(err.detail || "Failed to save link");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete
+  const handleDelete = async (doc) => {
+    if (!confirm(`Delete "${doc.title}"?`)) return;
+    try {
+      await apiFetch(`/api/v1/documents/${doc.id}`, { method: "DELETE" });
+      setDocs(prev => prev.filter(d => d.id !== doc.id));
+    } catch (err) {
+      alert(err.detail || "Delete failed");
+    }
+  };
+
   const filtered = docs
     .filter(d => {
       const q = search.toLowerCase();
-      const matchSearch = !q
-        || d.title.toLowerCase().includes(q)
-        || (d.description || "").toLowerCase().includes(q)
-        || (d.uploader?.name || "").toLowerCase().includes(q);
-      const matchType =
-        typeFilter === "all"
-        || (typeFilter === "file" && d.file_url)
-        || (typeFilter === "link" && d.link_url && !d.file_url)
-        || (typeFilter === "new"  && isNew(d));
+      const matchSearch = !q || d.title.toLowerCase().includes(q) || (d.description || "").toLowerCase().includes(q) || (d.uploader_name || "").toLowerCase().includes(q);
+      const matchType = typeFilter === "all" || (typeFilter === "file" && d.file_url) || (typeFilter === "link" && d.link_url && !d.file_url) || (typeFilter === "new" && isNew(d));
       return matchSearch && matchType;
     })
     .sort((a, b) => {
@@ -461,10 +431,10 @@ export default function DocumentsPage() {
     });
 
   const TYPE_OPTIONS = [
-    { value: "all",  label: "All types"     },
-    { value: "file", label: "Files only"    },
-    { value: "link", label: "Links only"    },
-    { value: "new",  label: "New (last 48h)"},
+    { value: "all",  label: "All types"      },
+    { value: "file", label: "Files only"     },
+    { value: "link", label: "Links only"     },
+    { value: "new",  label: "New (last 48h)" },
   ];
   const SORT_OPTIONS = [
     { value: "newest", label: "Newest first" },
@@ -472,87 +442,29 @@ export default function DocumentsPage() {
     { value: "title",  label: "Title (A–Z)"  },
   ];
 
-  // ── render ────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-
-        .docs-page {padding: 24px; min-height: 100vh; background: transparent; 
-        }
-
-        /* header */
-        .docs-header {
-          display: flex; flex-wrap: wrap; align-items: flex-start;
-          justify-content: space-between; gap: 12px; margin-bottom: 24px;
-        }
+        .docs-page { padding: 24px; min-height: 100vh; background: transparent; }
+        .docs-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
         .docs-title { font-size: 24px; font-weight: 700; color: #111827; }
         .docs-sub   { font-size: 14px; color: #6b7280; margin-top: 3px; }
-
-        /* add button */
-        .btn-add {
-          display: flex; align-items: center; gap: 8px;
-          padding: 10px 20px; border-radius: 10px; border: none;
-          background: #2563eb; color: #fff; font-size: 14px;
-          font-weight: 600; cursor: pointer;
-          box-shadow: 0 2px 8px rgba(37,99,235,.35);
-          white-space: nowrap;
-        }
+        .btn-add { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px; border: none; background: #2563eb; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(37,99,235,.35); white-space: nowrap; }
         .btn-add:hover { background: #1d4ed8; }
-
-        /* filters */
-        .filters-row {
-          display: flex; flex-wrap: wrap; align-items: center;
-          gap: 12px; margin-bottom: 24px;
-        }
-        .search-wrap {
-          position: relative; flex: 1; min-width: 220px; max-width: 480px;
-        }
-        .search-icon {
-          position: absolute; left: 12px; top: 50%;
-          transform: translateY(-50%); pointer-events: none;
-        }
-        .search-input {
-          width: 100%; padding: 9px 14px 9px 38px;
-          border-radius: 8px; border: 1.5px solid #e5e7eb;
-          font-size: 14px; outline: none; color: #111827;
-        }
+        .filters-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px; }
+        .search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 480px; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+        .search-input { width: 100%; padding: 9px 14px 9px 38px; border-radius: 8px; border: 1.5px solid #e5e7eb; font-size: 14px; outline: none; color: #111827; }
         .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px #dbeafe; }
         .search-input::placeholder { color: #9ca3af; }
-
-        /* grid */
-        .docs-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 16px;
-        }
-
-        /* empty */
-        .empty-card {
-          background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
-          padding: 60px 24px; text-align: center; color: #9ca3af;
-          font-size: 14px; grid-column: 1 / -1;
-        }
-
-        /* fab */
-        .fab {
-          position: fixed; bottom: 32px; right: 32px;
-          width: 52px; height: 52px; border-radius: 50%;
-          background: #2563eb; color: #fff; border: none; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 26px; box-shadow: 0 4px 14px rgba(37,99,235,.45);
-          transition: background .15s, transform .15s;
-        }
-        .fab:hover { background: #1d4ed8; transform: scale(1.06); }
-
-        @media(max-width: 600px) {
-          .docs-grid { grid-template-columns: 1fr; }
-        }
+        .docs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .empty-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 60px 24px; text-align: center; color: #9ca3af; font-size: 14px; grid-column: 1 / -1; }
+        @media(max-width: 600px) { .docs-grid { grid-template-columns: 1fr; } }
       `}</style>
 
       <div className="docs-page">
-        {/* Header */}
         <div className="docs-header">
           <div>
             <div className="docs-title">Team Documents</div>
@@ -563,65 +475,55 @@ export default function DocumentsPage() {
           </button>
         </div>
 
-        {/* Filters */}
         <div className="filters-row">
           <div className="search-wrap">
             <span className="search-icon"><IconSearch /></span>
-            <input
-              className="search-input"
-              placeholder="Search documents..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <input className="search-input" placeholder="Search documents..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <CustomSelect value={typeFilter} onChange={setTypeFilter} options={TYPE_OPTIONS} />
           <CustomSelect value={sortBy}     onChange={setSortBy}     options={SORT_OPTIONS} />
         </div>
 
-        {/* Cards */}
         {loading ? (
           <p style={{ fontSize: 14, color: "#9ca3af" }}>Loading...</p>
         ) : filtered.length === 0 ? (
-          <div className="docs-grid">
-            <div className="empty-card">No documents yet.</div>
-          </div>
+          <div className="docs-grid"><div className="empty-card">No documents yet.</div></div>
         ) : (
           <div className="docs-grid">
             {filtered.map(d => (
-              <DocCard
-                key={d.id}
-                doc={d}
-                isAdmin={isAdmin}
-                userId={userId}
-                onDelete={handleDelete}
-              />
+              <DocCard key={d.id} doc={d} currentUserId={user?.id} onDelete={handleDelete} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSave={handleSave}
+        onSaveFile={handleSaveFile}
+        onSaveLink={handleSaveLink}
         submitting={submitting}
       />
 
-      {/* FAB */}
       <button
-              onClick={() => setDrawerOpen(true)}
-              className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
-              title="Add a quick task"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-       
-            {/* Quick Task Drawer */}
-            <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-          
+        onClick={() => setDrawerOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
+        title="Add a quick task"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+
+      <AddQuickTaskDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <ProtectedRoute>
+      <DocumentsContent />
+    </ProtectedRoute>
   );
 }

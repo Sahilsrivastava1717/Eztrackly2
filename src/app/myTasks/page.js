@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTasks, isToday, isOverdue, isUpcoming, friendlyDate, dueLabel, PRIO_COLORS, STATUS_META } from "../../components/client/TaskContext";
 import AddQuickTaskDrawer from "../../components/client/AddQuickTaskDrawer";
+import { useAuth } from "../../components/client/AuthContext";
 
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
@@ -646,6 +647,7 @@ const TABS = [
 export default function TasksPage() {
   const { tasks, loaded, addTask, updateTask, deleteTask, markDone, setStatus } = useTasks();
 
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState("overdue");
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -672,7 +674,7 @@ export default function TasksPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = tasks.filter((t) => t.assigned_to === "self");
+    let list = tasks.filter((t) => t.assigned_to === "self" || t.assigned_to === currentUser?.id);
     if (q) list = list.filter((t) => t.title?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q));
     if (priorityFilter !== "all") list = list.filter((t) => t.priority === priorityFilter);
     list = [...list].sort((a, b) => {
@@ -690,14 +692,14 @@ export default function TasksPage() {
   const buckets = useMemo(() => {
     const open = filtered.filter((t) => t.status !== "done" && t.status !== "cancelled");
     return {
-      overdue:   open.filter((t) => isOverdue(t)),
-      today:     open.filter((t) => isToday(t.due_date) || (!t.due_date && isToday(t.created_at))),
-      upcoming:  open.filter((t) => isUpcoming(t)),
+      overdue:   open.filter((t) => isOverdue(t) && !isToday(t.due_date)),
+      today:     open.filter((t) => isToday(t.due_date)),
+      upcoming:  open.filter((t) => isUpcoming(t) && !isToday(t.due_date)),
       all:       open,
-      history:   filtered.filter((t) => t.status === "done"),
-      delegated: tasks.filter((t) => t.assigned_to !== "self"),
+      history:   filtered.filter((t) => t.status === "done" || t.status === "cancelled"),
+      delegated: tasks.filter((t) => t.assigned_to !== "self" && t.assigned_to !== currentUser?.id),
     };
-  }, [filtered, tasks]);
+  }, [filtered, tasks, currentUser]);
 
   const totals = useMemo(() => {
     const mine = tasks.filter((t) => t.assigned_to === "self");
@@ -711,7 +713,28 @@ export default function TasksPage() {
 
   const handleSave = (payload) => { if (editTask) { updateTask(editTask.id, payload); } else { addTask(payload); } };
   const handleMarkDone = (task) => { if (!task) return; setDoneTarget(task); };
-  const handleConfirmDone = (remarks) => { if (!doneTarget) return; markDone(doneTarget.id, remarks); setDoneTarget(null); };
+  const handleConfirmDone = async (remarks) => {
+    if (!doneTarget) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:8000/api/v1/tasks/${doneTarget.id}/mark-done`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ completion_remarks: remarks || null }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        // Update local task state
+        setStatus(doneTarget.id, "done");
+      }
+    } catch (err) {
+      console.error("Failed to mark done:", err);
+    }
+    setDoneTarget(null);
+  };
   const handleSetStatus = (id, status) => {
     if (status === "done") { const t = tasks.find((x) => x.id === id); if (t) setDoneTarget(t); }
     else { setStatus(id, status); }
