@@ -44,20 +44,25 @@ function ymdFromDate(d) {
 }
 
 // ── Camera Modal — fixed auto-capture bug ─────────────────────────────────────
+
 function CameraModal({ open, type, onCapture, onClose }) {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const [phase, setPhase] = useState("loading"); // "loading" | "live" | "captured" | "error"
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const streamRef  = useRef(null);
+  const [phase, setPhase]       = useState("loading"); // "loading"|"live"|"captured"|"error"
   const [captured, setCaptured] = useState(null);
   const [camError, setCamError] = useState("");
   const [liveTime, setLiveTime] = useState("");
+  const [workFrom, setWorkFrom] = useState("office"); // "office"|"wfh"
 
-  // Update live timestamp every second
+  // Live clock tick
   useEffect(() => {
     if (phase !== "live") return;
     const tick = () => setLiveTime(
-      new Date().toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true, timeZone:"Asia/Calcutta" })
+      new Date().toLocaleTimeString("en-IN", {
+        hour:"2-digit", minute:"2-digit", second:"2-digit",
+        hour12:true, timeZone:"Asia/Calcutta"
+      })
     );
     tick();
     const id = setInterval(tick, 1000);
@@ -70,26 +75,25 @@ function CameraModal({ open, type, onCapture, onClose }) {
     setPhase("loading");
     setCaptured(null);
     setCamError("");
+    setWorkFrom("office");
 
     let cancelled = false;
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false })
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode:"user", width:640, height:480 }, audio:false })
       .then(stream => {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          // Only set phase to "live" when video actually starts playing — NOT before
           videoRef.current.onloadedmetadata = () => {
-            videoRef.current.play().then(() => {
-              if (!cancelled) setPhase("live");
-            }).catch(() => {
-              if (!cancelled) setPhase("live"); // still show it
-            });
+            videoRef.current.play()
+              .then(() => { if (!cancelled) setPhase("live"); })
+              .catch(() => { if (!cancelled) setPhase("live"); });
           };
         }
       })
       .catch(() => {
-        if (!cancelled) { setCamError("Camera access denied. Please allow camera permission and try again."); setPhase("error"); }
+        if (!cancelled) { setCamError("Camera access denied. Please allow camera permission."); setPhase("error"); }
       });
 
     return () => {
@@ -98,7 +102,7 @@ function CameraModal({ open, type, onCapture, onClose }) {
     };
   }, [open]);
 
-  // Stop stream when modal closes
+  // Stop stream when closed
   useEffect(() => {
     if (!open && streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -109,29 +113,25 @@ function CameraModal({ open, type, onCapture, onClose }) {
   if (!open) return null;
 
   const handleCapture = () => {
-    // Must be in live phase with a valid video element
     if (phase !== "live" || !videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
+    const video  = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 640;
+    canvas.width  = video.videoWidth  || 640;
     canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext("2d");
-    // Mirror the image to match what user sees
-    ctx.save();
-    ctx.scale(-1, 1);
+    ctx.save(); ctx.scale(-1, 1);
     ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
     ctx.restore();
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     setCaptured(dataUrl);
     setPhase("captured");
-    // Stop camera stream after capture
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
   };
 
   const handleRetake = () => {
-    setCaptured(null);
-    setPhase("loading");
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false })
+    setCaptured(null); setPhase("loading");
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode:"user", width:640, height:480 }, audio:false })
       .then(stream => {
         streamRef.current = stream;
         if (videoRef.current) {
@@ -144,68 +144,110 @@ function CameraModal({ open, type, onCapture, onClose }) {
       .catch(() => { setCamError("Camera error"); setPhase("error"); });
   };
 
-  const handleConfirm = () => { if (captured) onCapture(captured); };
+  const handleConfirm = () => { if (captured) onCapture(captured, workFrom); };
 
   const isIn = type === "checkin";
 
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:9999, background:"rgba(0,0,0,0.55)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:"#fff", borderRadius:20, padding:28, width:"100%", maxWidth:460, boxShadow:"0 25px 60px rgba(0,0,0,0.35)" }}>
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16 }}>
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(0,0,0,0.5)", backdropFilter:"blur(3px)",
+      display:"flex", alignItems:"center", justifyContent:"center",
+    }}>
+      <div style={{
+        background:"#fff", borderRadius:18, padding:"28px 28px 24px",
+        width:"100%", maxWidth:460,
+        boxShadow:"0 30px 70px rgba(0,0,0,0.3)",
+      }}>
+
+        {/* ── Header ── */}
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:14 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:34, height:34, borderRadius:"50%", background: isIn?"#dcfce7":"#dbeafe", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={isIn?"#16a34a":"#2563eb"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+            <div style={{
+              width:34, height:34, borderRadius:"50%",
+              background: isIn ? "#dbeafe" : "#fef3c7",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+            }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+                stroke={isIn ? "#2563eb" : "#d97706"} strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
               </svg>
             </div>
             <div>
-              <div style={{ fontSize:16, fontWeight:700, color:"#111827" }}>
+              <div style={{ fontSize:17, fontWeight:700, color:"#111827", letterSpacing:"-0.2px" }}>
                 {isIn ? "Check in with a live photo" : "Check out with a live photo"}
               </div>
-              <div style={{ fontSize:12, color:"#6b7280", marginTop:2 }}>
-                Capture a quick selfie to confirm your {isIn?"check-in":"check-out"}.
+              <div style={{ fontSize:13, color:"#6b7280", marginTop:2 }}>
+                {isIn ? "Smile! Capture a quick selfie to confirm your check-in." : "Capture a quick selfie to confirm your check-out."}
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1.5px solid #e5e7eb", background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"#6b7280", flexShrink:0 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button onClick={onClose} style={{
+            width:30, height:30, borderRadius:"50%",
+            border:"1.5px solid #e5e7eb", background:"#f9fafb",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            cursor:"pointer", color:"#6b7280", flexShrink:0, marginLeft:8,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
           </button>
         </div>
 
-        {/* Video/image area */}
-        <div style={{ borderRadius:12, overflow:"hidden", background:"#111", aspectRatio:"4/3", position:"relative", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16 }}>
+        {/* ── Camera / image area ── */}
+        <div style={{
+          borderRadius:12, overflow:"hidden", background:"#0f0f0f",
+          aspectRatio:"4/3", position:"relative",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          marginBottom:16,
+        }}>
+          {/* Loading spinner */}
+          {phase === "loading" && (
+            <div style={{ textAlign:"center", color:"#9ca3af" }}>
+              <svg style={{ animation:"att-spin 1s linear infinite", display:"block", margin:"0 auto 8px" }}
+                width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              <div style={{ fontSize:13 }}>Starting camera…</div>
+            </div>
+          )}
+
+          {/* Error */}
           {phase === "error" && (
-            <div style={{ color:"#f87171", textAlign:"center", padding:20 }}>
-              <div style={{ fontSize:36, marginBottom:8 }}>📷</div>
+            <div style={{ color:"#f87171", textAlign:"center", padding:24 }}>
+              <div style={{ fontSize:40, marginBottom:10 }}>📷</div>
               <div style={{ fontSize:13 }}>{camError}</div>
             </div>
           )}
-          {phase === "loading" && (
-            <div style={{ color:"#9ca3af", textAlign:"center" }}>
-              <svg style={{ animation:"att-spin 1s linear infinite", display:"block", margin:"0 auto 8px" }} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-              <div style={{ fontSize:13, color:"#9ca3af" }}>Starting camera…</div>
-            </div>
-          )}
-          {/* Video — always rendered but hidden when not needed */}
+
+          {/* Live video — always rendered, shown only when live */}
           <video
             ref={videoRef}
-            autoPlay
-            muted
-            playsInline
+            autoPlay muted playsInline
             style={{
+              position:"absolute", inset:0,
               width:"100%", height:"100%", objectFit:"cover",
               transform:"scaleX(-1)",
               display: phase === "live" ? "block" : "none",
             }}
           />
+
           {/* Captured image */}
           {phase === "captured" && captured && (
-            <img src={captured} alt="captured" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            <img src={captured} alt="captured"
+              style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
           )}
-          {/* Live timestamp */}
+
+          {/* Live timestamp overlay */}
           {phase === "live" && liveTime && (
-            <div style={{ position:"absolute", bottom:10, left:10, background:"rgba(0,0,0,0.6)", borderRadius:6, padding:"3px 8px", fontSize:12, color:"#fff", fontWeight:600 }}>
+            <div style={{
+              position:"absolute", bottom:10, left:12,
+              background:"rgba(0,0,0,0.58)", borderRadius:6,
+              padding:"3px 9px", fontSize:12, color:"#fff", fontWeight:600,
+              letterSpacing:"0.02em",
+            }}>
               {liveTime}
             </div>
           )}
@@ -213,32 +255,108 @@ function CameraModal({ open, type, onCapture, onClose }) {
 
         <canvas ref={canvasRef} style={{ display:"none" }} />
 
-        {/* Action buttons */}
+        {/* ── Work location selector (only on checkin, before capture) ── */}
+        {isIn && phase !== "captured" && (
+          <div style={{ marginBottom:16 }}>
+            <div style={{
+              fontSize:11, fontWeight:700, textTransform:"uppercase",
+              letterSpacing:".08em", color:"#9ca3af", marginBottom:10,
+            }}>
+              Where are you working from?
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {[
+                { val:"office", label:"Office", icon:(
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                )},
+                { val:"wfh", label:"WFH", icon:(
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                  </svg>
+                )},
+              ].map(opt => (
+                <button
+                  key={opt.val}
+                  onClick={() => setWorkFrom(opt.val)}
+                  style={{
+                    display:"flex", alignItems:"center", gap:9,
+                    padding:"11px 16px", borderRadius:10,
+                    border: workFrom===opt.val ? "2px solid #2563eb" : "1.5px solid #e5e7eb",
+                    background: workFrom===opt.val ? "#eff6ff" : "#fff",
+                    color: workFrom===opt.val ? "#2563eb" : "#374151",
+                    fontSize:14, fontWeight:600, cursor:"pointer",
+                    transition:"all .15s",
+                  }}
+                >
+                  {/* Radio dot */}
+                  <div style={{
+                    width:16, height:16, borderRadius:"50%",
+                    border: workFrom===opt.val ? "5px solid #2563eb" : "1.5px solid #d1d5db",
+                    background:"#fff", flexShrink:0, transition:"all .15s",
+                  }} />
+                  <span style={{ color: workFrom===opt.val?"#2563eb":"#6b7280" }}>{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Action buttons ── */}
         {phase !== "captured" ? (
+          /* Capture photo button */
           <button
             onClick={handleCapture}
             disabled={phase !== "live"}
             style={{
-              width:"100%", padding:"13px", borderRadius:10, border:"none",
-              background: phase === "live" ? "#2563eb" : "#9ca3af",
+              width:"100%", padding:"14px", borderRadius:10, border:"none",
+              background: phase === "live" ? "#2563eb" : "#93c5fd",
               color:"#fff", fontSize:15, fontWeight:700,
               cursor: phase === "live" ? "pointer" : "not-allowed",
               display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-              boxShadow: phase === "live" ? "0 4px 12px rgba(37,99,235,.35)" : "none",
+              boxShadow: phase === "live" ? "0 4px 14px rgba(37,99,235,.4)" : "none",
+              transition:"all .2s",
             }}
+            onMouseEnter={e => { if(phase==="live"){ e.currentTarget.style.background="#1d4ed8"; e.currentTarget.style.transform="translateY(-1px)"; e.currentTarget.style.boxShadow="0 8px 20px rgba(37,99,235,.4)"; } }}
+            onMouseLeave={e => { e.currentTarget.style.background=phase==="live"?"#2563eb":"#93c5fd"; e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow=phase==="live"?"0 4px 14px rgba(37,99,235,.4)":"none"; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
             </svg>
             {phase === "loading" ? "Starting camera…" : "Capture photo"}
           </button>
         ) : (
+          /* Retake + Confirm */
           <div style={{ display:"flex", gap:10 }}>
-            <button onClick={handleRetake} style={{ flex:1, padding:"13px", borderRadius:10, border:"1.5px solid #e5e7eb", background:"#f9fafb", fontSize:14, fontWeight:600, color:"#374151", cursor:"pointer" }}>
+            <button onClick={handleRetake} style={{
+              flex:1, padding:"13px", borderRadius:10,
+              border:"1.5px solid #e5e7eb", background:"#f9fafb",
+              fontSize:14, fontWeight:600, color:"#374151",
+              cursor:"pointer", transition:"all .15s",
+            }}
+              onMouseEnter={e=>{ e.currentTarget.style.background="#f3f4f6"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background="#f9fafb"; }}
+            >
               Retake
             </button>
-            <button onClick={handleConfirm} style={{ flex:2, padding:"13px", borderRadius:10, border:"none", background: isIn?"#16a34a":"#2563eb", color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:`0 4px 12px ${isIn?"rgba(22,163,74,.35)":"rgba(37,99,235,.35)"}` }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <button onClick={handleConfirm} style={{
+              flex:2, padding:"13px", borderRadius:10, border:"none",
+              background: isIn ? "#16a34a" : "#2563eb",
+              color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+              boxShadow:`0 4px 12px ${isIn?"rgba(22,163,74,.35)":"rgba(37,99,235,.35)"}`,
+              transition:"all .2s",
+            }}
+              onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-1px)"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
               Confirm {isIn ? "Check In" : "Check Out"}
             </button>
           </div>
@@ -247,6 +365,7 @@ function CameraModal({ open, type, onCapture, onClose }) {
     </div>
   );
 }
+
 
 // ── Photo badge next to time (like ref image) ─────────────────────────────────
 function PhotoBadge({ src, label }) {
@@ -477,25 +596,6 @@ export default function MyAttendancePage() {
               <p style={{ fontSize:13, color:"#6b7280", marginTop:3 }}>Your daily check-in and check-out times</p>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-              {/* Check In / Out */}
-              {isCurrentMonth && (
-                <button
-                  onClick={() => setCameraModal(todayStatus.active ? "checkout" : "checkin")}
-                  disabled={actionLoading}
-                  style={{
-                    display:"flex", alignItems:"center", gap:8, padding:"9px 20px", borderRadius:10, border:"none",
-                    background: todayStatus.active?"#ef4444":"#16a34a", color:"#fff", fontSize:14, fontWeight:700,
-                    cursor: actionLoading?"not-allowed":"pointer", opacity: actionLoading?.7:1,
-                    boxShadow:`0 4px 12px ${todayStatus.active?"rgba(239,68,68,.3)":"rgba(22,163,74,.3)"}`,
-                    transition:"all .2s",
-                  }}
-                  onMouseEnter={e=>{ if(!actionLoading){e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow=`0 8px 20px ${todayStatus.active?"rgba(239,68,68,.35)":"rgba(22,163,74,.35)"}`;} }}
-                  onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow=`0 4px 12px ${todayStatus.active?"rgba(239,68,68,.3)":"rgba(22,163,74,.3)"}`; }}
-                >
-                  <IconCam />
-                  {actionLoading ? "Processing…" : todayStatus.active ? "Check Out" : "Check In"}
-                </button>
-              )}
               <button onClick={exportCSV} className="att-btn" style={btnStyle()}><IconDl /> CSV</button>
               <button onClick={exportPDF} className="att-btn" style={btnStyle()}><IconDl /> PDF</button>
               <button className="att-arrow" onClick={()=>{const d=new Date(cursor);d.setMonth(d.getMonth()-1);setCursor(d);}}><IconChL /></button>
@@ -561,21 +661,6 @@ export default function MyAttendancePage() {
                 </div>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                {/* Today's photos */}
-                {todayDay?.checkInPhoto && (
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
-                    <img src={todayDay.checkInPhoto} alt="in" style={{ width:40, height:40, borderRadius:8, objectFit:"cover", border:"2px solid #bbf7d0", cursor:"pointer" }}
-                      onClick={()=>window.open(todayDay.checkInPhoto,"_blank")} />
-                    <span style={{ fontSize:9, color:"#16a34a", fontWeight:700 }}>IN</span>
-                  </div>
-                )}
-                {todayDay?.checkOutPhoto && (
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
-                    <img src={todayDay.checkOutPhoto} alt="out" style={{ width:40, height:40, borderRadius:8, objectFit:"cover", border:"2px solid #fde68a", cursor:"pointer" }}
-                      onClick={()=>window.open(todayDay.checkOutPhoto,"_blank")} />
-                    <span style={{ fontSize:9, color:"#d97706", fontWeight:700 }}>OUT</span>
-                  </div>
-                )}
                 {todayStatus.active && (
                   <Bdg color="#15803d" bg="#f0fdf4" border="#bbf7d0">
                     <span className="att-pulse" style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", display:"inline-block" }} />

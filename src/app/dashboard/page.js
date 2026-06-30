@@ -59,7 +59,7 @@ function StatCard({ label, value, gradient, icon }) {
 function DashboardContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { tasks } = useTasks();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   // Use all tasks (they're already filtered by user on the backend)
   const myTasks = tasks;
@@ -74,6 +74,7 @@ function DashboardContent() {
   const dueToday = myTasks.filter(
     (t) => t.status !== "done" && t.status !== "cancelled" && isToday(t.due_date)
   );
+  
 
   const upcoming = myTasks
     .filter((t) => t.status !== "done" && t.status !== "cancelled" && t.due_date && new Date(t.due_date) > now && !isToday(t.due_date))
@@ -154,19 +155,6 @@ function DashboardContent() {
               </svg>
               Open my tasks
             </Link>
-
-            {/* Logout button */}
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-all hover:bg-gray-50 hover:text-red-500 whitespace-nowrap"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              Logout
-            </button>
           </div>
         </div>
 

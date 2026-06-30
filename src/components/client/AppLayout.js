@@ -1,9 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthContext";
+import { StandupModal, WrapUpModal } from "./AttendanceCheckModals";
+import { useTasks, isToday } from "./TaskContext";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...authHeaders(), ...options.headers } });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw err; }
+  return res.json();
+}
+function fmtTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Calcutta" });
+}
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: (
@@ -158,6 +176,354 @@ function LogoutModal({ open, onClose, onConfirm }) {
   );
 }
 
+// ─── Navbar Camera Modal (check-in / check-out selfie capture) ───────────────
+function NavCameraModal({ open, type, onCapture, onClose }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const [phase, setPhase] = useState("loading"); // "loading"|"live"|"captured"|"error"
+  const [captured, setCaptured] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setPhase("loading");
+    setCaptured(null);
+
+    let cancelled = false;
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false })
+      .then((stream) => {
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current
+              .play()
+              .then(() => { if (!cancelled) setPhase("live"); })
+              .catch(() => { if (!cancelled) setPhase("live"); });
+          };
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPhase("error");
+      });
+
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleCapture = () => {
+    if (phase !== "live" || !videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setCaptured(dataUrl);
+    setPhase("captured");
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const handleRetake = () => {
+    setCaptured(null);
+    setPhase("loading");
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false })
+      .then((stream) => {
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().then(() => setPhase("live")).catch(() => setPhase("live"));
+          };
+        }
+      })
+      .catch(() => setPhase("error"));
+  };
+
+  const isIn = type === "checkin";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 18, padding: "26px 26px 22px",
+        width: "100%", maxWidth: 420,
+        boxShadow: "0 30px 70px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
+              {isIn ? "Check in with a live photo" : "Check out with a live photo"}
+            </div>
+            <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
+              {isIn ? "Capture a quick selfie to confirm your check-in." : "Capture a quick selfie to confirm your check-out."}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 28, height: 28, borderRadius: "50%",
+            border: "1.5px solid #e5e7eb", background: "#f9fafb",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: "#6b7280", flexShrink: 0, marginLeft: 8,
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style={{
+          borderRadius: 12, overflow: "hidden", background: "#0f0f0f",
+          aspectRatio: "4/3", position: "relative",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 16,
+        }}>
+          {phase === "loading" && (
+            <div style={{ textAlign: "center", color: "#9ca3af" }}>
+              <svg style={{ animation: "ez-spin 1s linear infinite", display: "block", margin: "0 auto 8px" }}
+                width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              <div style={{ fontSize: 13 }}>Starting camera…</div>
+            </div>
+          )}
+          {phase === "error" && (
+            <div style={{ color: "#f87171", textAlign: "center", padding: 24 }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📷</div>
+              <div style={{ fontSize: 13 }}>Camera access denied. Please allow camera permission.</div>
+            </div>
+          )}
+          <video
+            ref={videoRef}
+            autoPlay muted playsInline
+            style={{
+              position: "absolute", inset: 0,
+              width: "100%", height: "100%", objectFit: "cover",
+              transform: "scaleX(-1)",
+              display: phase === "live" ? "block" : "none",
+            }}
+          />
+          {phase === "captured" && captured && (
+            <img src={captured} alt="captured"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          )}
+        </div>
+
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+
+        {phase !== "captured" ? (
+          <button
+            onClick={handleCapture}
+            disabled={phase !== "live"}
+            style={{
+              width: "100%", padding: "13px", borderRadius: 10, border: "none",
+              background: phase === "live" ? "#2563eb" : "#93c5fd",
+              color: "#fff", fontSize: 14, fontWeight: 700,
+              cursor: phase === "live" ? "pointer" : "not-allowed",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            {phase === "loading" ? "Starting camera…" : "Capture photo"}
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={handleRetake} style={{
+              flex: 1, padding: "12px", borderRadius: 10,
+              border: "1.5px solid #e5e7eb", background: "#f9fafb",
+              fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer",
+            }}>
+              Retake
+            </button>
+            <button onClick={() => onCapture(captured)} style={{
+              flex: 2, padding: "12px", borderRadius: 10, border: "none",
+              background: isIn ? "#16a34a" : "#2563eb",
+              color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Confirm {isIn ? "Check In" : "Check Out"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Navbar Attendance Badge (Check in / In since.../Out) ────────────────────
+// ─── Navbar Attendance Badge (Check in / In since.../Out) ────────────────────
+function AttendanceStatusBadge() {
+  const [status, setStatus] = useState({ active: false, session: null });
+  const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState(null); // "checkin" | "checkout" | null
+  const [showStandup, setShowStandup] = useState(false);
+  const [showWrapup, setShowWrapup] = useState(false);
+  const [pendingCheckoutPhoto, setPendingCheckoutPhoto] = useState(null);
+  const [standupPriorities, setStandupPriorities] = useState([]);
+
+  const { tasks, updateTask } = useTasks();
+
+  const dueToday = (tasks || []).filter(
+    (t) => t.status !== "done" && t.status !== "cancelled" && isToday(t.due_date)
+  );
+
+  const refresh = useCallback(async () => {
+    try {
+      const td = await apiFetch("/api/v1/attendance/today");
+      setStatus(td || { active: false, session: null });
+    } catch {
+      // silently ignore — keep last known state
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  // Photo captured from NavCameraModal
+  const handleCapture = async (photoDataUrl) => {
+    const mode = modal;
+    setModal(null);
+
+    if (mode === "checkin") {
+      setLoading(true);
+      try {
+        await apiFetch("/api/v1/attendance/checkin", {
+          method: "POST",
+          body: JSON.stringify({ photo_url: photoDataUrl }),
+        });
+        await refresh();
+        setShowStandup(true); // ask for today's priorities right after checking in
+      } catch {
+        // optionally surface a toast here
+      } finally {
+        setLoading(false);
+      }
+    } else if (mode === "checkout") {
+      // Don't call the API yet — show the wrap-up recap first
+      setPendingCheckoutPhoto(photoDataUrl);
+      setShowWrapup(true);
+    }
+  };
+
+  const finalizeCheckout = async (recap) => {
+    setLoading(true);
+    try {
+      await apiFetch("/api/v1/attendance/checkout", {
+        method: "POST",
+        body: JSON.stringify({
+          photo_url: pendingCheckoutPhoto,
+          ...(recap || {}),
+        }),
+      });
+      // Optionally mark any tasks the user checked off as done
+      if (recap?.completed_task_ids?.length && updateTask) {
+        await Promise.all(
+          recap.completed_task_ids.map((id) => updateTask(id, { status: "done" }).catch(() => {}))
+        );
+      }
+      await refresh();
+    } catch {
+      // optionally surface a toast here
+    } finally {
+      setLoading(false);
+      setPendingCheckoutPhoto(null);
+      setShowWrapup(false);
+    }
+  };
+
+  const handleStandupSubmit = async (priorities) => {
+    setStandupPriorities(priorities);
+    try {
+      await apiFetch("/api/v1/attendance/standup", {
+        method: "POST",
+        body: JSON.stringify({ priorities }),
+      });
+    } catch {
+      // non-fatal — standup is a nice-to-have, don't block the user
+    } finally {
+      setShowStandup(false);
+    }
+  };
+
+  return (
+    <>
+      <NavCameraModal open={!!modal} type={modal} onCapture={handleCapture} onClose={() => setModal(null)} />
+
+      <StandupModal
+        open={showStandup}
+        onSubmit={handleStandupSubmit}
+        onSkip={() => setShowStandup(false)}
+      />
+
+      <WrapUpModal
+        open={showWrapup}
+        dueTasks={dueToday}
+        standupPriorities={standupPriorities}
+        onSubmit={finalizeCheckout}
+        onSkip={() => finalizeCheckout(null)}
+      />
+
+      {status.active ? (
+        <div style={{ display: "flex", alignItems: "center", borderRadius: 8, border: "1px solid #bbf7d0", background: "#f0fdf4", padding: "4px 8px", gap: 6, whiteSpace: "nowrap" }}>
+          <div style={{ width: 16, height: 16, borderRadius: "50%", border: "1.5px solid #16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#15803d" }}>
+            In since {fmtTime(status.session?.login_at)}
+          </span>
+          <button
+            onClick={() => setModal("checkout")}
+            disabled={loading}
+            className="ez-nav-btn"
+            style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 999, border: "1px solid #d1d5db", background: "#fff", padding: "3px 10px", fontSize: 12, fontWeight: 700, color: "#374151", cursor: loading ? "not-allowed" : "pointer" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Out
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setModal("checkin")}
+          disabled={loading}
+          className="ez-nav-btn"
+          style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 8, border: "1px solid #e5e7eb", padding: "5px 10px", fontSize: 13, fontWeight: 700, color: "#374151", background: "transparent", cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          {loading ? "Processing…" : "Check in"}
+        </button>
+      )}
+    </>
+  );
+}
+
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 function Navbar({ collapsed, onToggle }) {
   const [mounted, setMounted] = useState(false);
@@ -231,16 +597,10 @@ function Navbar({ collapsed, onToggle }) {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             Lv 5 · Achiever
           </div>
-          <div style={{ display: "flex", alignItems: "center", borderRadius: 8, border: "1px solid #bbf7d0", background: "#f0fdf4", padding: "4px 8px", gap: 6, whiteSpace: "nowrap" }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", border: "1.5px solid #16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#15803d" }}>In since 9:24 AM</span>
-            <button className="ez-nav-btn" style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 999, border: "1px solid #d1d5db", background: "#fff", padding: "3px 10px", fontSize: 12, fontWeight: 700, color: "#374151", cursor: "pointer" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              Out
-            </button>
-          </div>
+
+          {/* ── Dynamic Check in / In since.../Out ── */}
+          <AttendanceStatusBadge />
+
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13, color: "#374151", whiteSpace: "nowrap" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <div>
@@ -368,11 +728,11 @@ function Sidebar({ collapsed, onLogoutClick }) {
 function AppShell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const { logout } = useAuth();
 
   const handleLogoutConfirm = () => {
     setLogoutOpen(false);
-    // Add your actual logout logic here, e.g. signOut() or router.push("/login")
-    console.log("User signed out");
+    logout();
   };
 
   return (
@@ -382,6 +742,7 @@ function AppShell({ children }) {
           from { opacity: 0; transform: scale(0.94) translateY(8px); }
           to   { opacity: 1; transform: scale(1) translateY(0); }
         }
+        @keyframes ez-spin { to { transform: rotate(360deg); } }
 
         /* ── Navbar buttons ── */
         .ez-nav-btn {
