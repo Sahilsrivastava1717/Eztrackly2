@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useTasks } from "./TaskContext";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
@@ -14,57 +15,8 @@ const PRIORITY_OPTIONS = [
 
 const TODAY_ISO = new Date().toISOString().substring(0, 10);
 
-export default function AddQuickTaskDrawer({ open, onClose }) {
-  const [form, setForm] = useState({
-    title: "", notes: "", assignTo: "myself",
-    category: "", priority: "medium",
-    due_date: TODAY_ISO, link: "", file: null,
-  });
-  const [saving,    setSaving]    = useState(false);
-  const [prioOpen,  setPrioOpen]  = useState(false);
-  const titleRef = useRef(null);
-  const prioRef  = useRef(null);
-
-  useEffect(() => {
-    if (open) {
-      setForm({ title:"", notes:"", assignTo:"myself", category:"", priority:"medium", due_date:TODAY_ISO, link:"", file:null });
-      setSaving(false); setPrioOpen(false);
-      setTimeout(() => titleRef.current?.focus(), 80);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!prioOpen) return;
-    const h = (e) => { if (prioRef.current && !prioRef.current.contains(e.target)) setPrioOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [prioOpen]);
-
-  const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
-
-  const handleSubmit = () => {
-    if (!form.title.trim()) { titleRef.current?.focus(); return; }
-    setSaving(true);
-    // wire up your real save / addTask logic here
-    console.log("New task:", form);
-    setTimeout(() => { setSaving(false); onClose(); }, 300);
-  };
-
-  const selPrio = PRIORITY_OPTIONS.find(p => p.value === form.priority);
-
-  if (!open) return null;
-
-  return (
-    <>
-      <style>{`
-        .aqt-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.38);backdrop-filter:blur(2px);}
+const DRAWER_STYLES = `
+        .aqt-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.42);will-change:opacity;}
         .aqt-modal{
           position:fixed;left:50%;top:50%;z-index:101;
           transform:translate(-50%,-50%);
@@ -74,9 +26,15 @@ export default function AddQuickTaskDrawer({ open, onClose }) {
           box-shadow:0 24px 64px rgba(0,0,0,0.18);
           overflow:hidden;
           animation:aqt-in .18s ease;
+          min-height:0;
+          will-change:transform;
+          contain:layout style;
         }
         @keyframes aqt-in{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
-        .aqt-body{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px;}
+        .aqt-body{
+          flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+          padding:20px 24px;display:flex;flex-direction:column;gap:14px;
+        }
         .aqt-body::-webkit-scrollbar{width:4px}
         .aqt-body::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
         .aqt-label{font-size:13px;font-weight:600;color:#111827;display:flex;align-items:center;gap:6px;margin-bottom:5px;}
@@ -176,7 +134,94 @@ export default function AddQuickTaskDrawer({ open, onClose }) {
           transition:border-color .15s;
         }
         .aqt-date-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(59,130,246,.15);}
-      `}</style>
+        .aqt-error{
+          font-size:13px;color:#dc2626;background:#fef2f2;
+          border:1px solid #fecaca;border-radius:10px;padding:9px 13px;
+        }
+`;
+
+export default function AddQuickTaskDrawer({ open, onClose }) {
+  const { addTask } = useTasks();
+
+  const [form, setForm] = useState({
+    title: "", notes: "", assignTo: "myself",
+    category: "", priority: "medium",
+    due_date: TODAY_ISO, link: "", file: null,
+  });
+  const [saving,    setSaving]    = useState(false);
+  const [errorMsg,  setErrorMsg]  = useState("");
+  const [prioOpen,  setPrioOpen]  = useState(false);
+  const titleRef = useRef(null);
+  const prioRef  = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setForm({ title:"", notes:"", assignTo:"myself", category:"", priority:"medium", due_date:TODAY_ISO, link:"", file:null });
+      setSaving(false); setPrioOpen(false); setErrorMsg("");
+      setTimeout(() => titleRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!prioOpen) return;
+    const h = (e) => { if (prioRef.current && !prioRef.current.contains(e.target)) setPrioOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [prioOpen]);
+
+  const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) { titleRef.current?.focus(); return; }
+    setSaving(true);
+    setErrorMsg("");
+
+    // Fold any optional category/link into the description so nothing the
+    // user typed gets silently dropped (backend task model has no separate
+    // category/link/file fields yet).
+    let description = form.notes.trim();
+    if (form.category.trim()) description += (description ? "\n\n" : "") + `Category: ${form.category.trim()}`;
+    if (form.link.trim()) description += (description ? "\n" : "") + `Link: ${form.link.trim()}`;
+
+    const payload = {
+      title: form.title.trim(),
+      description,
+      priority: form.priority,
+      due_date: form.due_date ? new Date(`${form.due_date}T23:59:59`).toISOString() : null,
+      assigned_to: "self",
+    };
+
+    try {
+      await addTask(payload);
+      setSaving(false);
+      onClose();
+    } catch (err) {
+      setSaving(false);
+      setErrorMsg(err?.detail || "Failed to add task. Please try again.");
+    }
+  };
+
+  const selPrio = PRIORITY_OPTIONS.find(p => p.value === form.priority);
+
+  if (!open) return null;
+
+  return (
+    <>
+      <style>{DRAWER_STYLES}</style>
 
       {/* Backdrop */}
       <div className="aqt-overlay" onClick={onClose} />
@@ -211,6 +256,8 @@ export default function AddQuickTaskDrawer({ open, onClose }) {
 
         {/* Body */}
         <div className="aqt-body">
+
+          {errorMsg && <div className="aqt-error">{errorMsg}</div>}
 
           {/* Title */}
           <div>
@@ -393,6 +440,9 @@ export default function AddQuickTaskDrawer({ open, onClose }) {
                 {form.file ? form.file.name : "No file chosen"}
               </span>
             </div>
+            <p style={{ fontSize:11, color:"#9ca3af", marginTop:5 }}>
+              File attachments aren't uploaded yet — the backend has no endpoint for this. Title, notes, category, priority, due date, and link are all saved.
+            </p>
           </div>
 
         </div>

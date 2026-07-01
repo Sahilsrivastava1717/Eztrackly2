@@ -366,16 +366,57 @@ function CameraModal({ open, type, onCapture, onClose }) {
   );
 }
 
+// ── Photo Preview Modal (Check-in / Check-out photo, full size) ───────────────
+function PhotoPreviewModal({ photo, onClose }) {
+  if (!photo) return null;
+  return (
+    <div
+      style={{
+        position:"fixed", inset:0, zIndex:10000,
+        background:"rgba(0,0,0,0.6)", backdropFilter:"blur(3px)",
+        display:"flex", alignItems:"center", justifyContent:"center", padding:20,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background:"#fff", borderRadius:18, padding:"22px 22px 26px",
+        width:"100%", maxWidth:560,
+        boxShadow:"0 30px 70px rgba(0,0,0,0.35)",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#111827" }}>
+            {photo.label === "In" ? "Check-in photo" : "Check-out photo"}
+          </div>
+          <button onClick={onClose} style={{
+            width:32, height:32, borderRadius:"50%",
+            border:"1.5px solid #e5e7eb", background:"#fff",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            cursor:"pointer", color:"#374151", flexShrink:0,
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <img
+          src={photo.src}
+          alt={photo.label === "In" ? "Check-in photo" : "Check-out photo"}
+          style={{ width:"100%", borderRadius:12, display:"block", objectFit:"cover" }}
+        />
+      </div>
+    </div>
+  );
+}
 
 // ── Photo badge next to time (like ref image) ─────────────────────────────────
-function PhotoBadge({ src, label }) {
+function PhotoBadge({ src, label, onPreview }) {
   if (!src) return null;
   return (
     <div style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
       <img
         src={src}
         alt={label}
-        onClick={() => window.open(src, "_blank")}
+        onClick={() => onPreview({ src, label })}
         style={{ width:34, height:34, borderRadius:8, objectFit:"cover", border:"2px solid #e5e7eb", cursor:"pointer", transition:"transform .15s" }}
         onMouseEnter={e => e.currentTarget.style.transform="scale(1.1)"}
         onMouseLeave={e => e.currentTarget.style.transform="scale(1)"}
@@ -430,8 +471,63 @@ export default function MyAttendancePage() {
   const [tab, setTab]                 = useState("daily");
   const [now, setNow]                 = useState(() => new Date());
   const [cursor, setCursor]           = useState(() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
-  const [toast, setToast]             = useState(null); // { msg, ok }
-  const [cameraModal, setCameraModal] = useState(null); // "checkin"|"checkout"|null
+  const [toast, setToast]             = useState(null);
+  const [cameraModal, setCameraModal] = useState(null);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+
+  // ── AI Weekly Summary state ────────────────────────────────────────────────
+  const [summary, setSummary]               = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryWeekStart, setSummaryWeekStart] = useState(() => {
+    // Monday of current week in IST
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    return d;
+  });
+
+  const summaryWeekLabel = useMemo(() => {
+    const end = new Date(summaryWeekStart);
+    end.setDate(end.getDate() + 6);
+    const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const isThisWeek = (() => {
+      const todayIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+      const curMonday = new Date(todayIST);
+      curMonday.setDate(todayIST.getDate() - (todayIST.getDay() + 6) % 7);
+      curMonday.setHours(0, 0, 0, 0);
+      return summaryWeekStart.getTime() === curMonday.getTime();
+    })();
+    return `${fmt(summaryWeekStart)} — ${fmt(end)}${isThisWeek ? " (this week)" : ""}`;
+  }, [summaryWeekStart]);
+
+  const shiftSummaryWeek = (dir) => {
+    setSummaryWeekStart(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + dir * 7);
+      return d;
+    });
+    setSummary(null);
+  };
+
+  const generateSummary = async () => {
+    setSummaryLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const weekStr = summaryWeekStart.toLocaleDateString("en-CA", { timeZone: "Asia/Calcutta" });
+      const res = await fetch(`${API_BASE}/api/v1/ai/weekly-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ week_start: weekStr }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setSummary(data);
+    } catch {
+      setSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(id); }, []);
 
@@ -442,17 +538,38 @@ export default function MyAttendancePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    // Fetch sessions, stats, and today's status independently — if stats
+    // fails, sessions (the main table) still loads correctly.
     try {
-      const [sess, st, td] = await Promise.all([
-        apiFetch(`/api/v1/attendance/sessions?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`),
-        apiFetch(`/api/v1/attendance/stats?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`),
-        isCurrentMonth ? apiFetch("/api/v1/attendance/today") : Promise.resolve({active:false,session:null}),
-      ]);
+      const sess = await apiFetch(
+        `/api/v1/attendance/sessions?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`
+      );
       setSessions(Array.isArray(sess) ? sess : []);
+    } catch {
+      showToast("Failed to load attendance sessions", false);
+    }
+
+    try {
+      const st = await apiFetch(
+        `/api/v1/attendance/stats?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`
+      );
       setStats(st);
-      setTodayStatus(td || {active:false,session:null});
-    } catch { showToast("Failed to load attendance data", false); }
-    finally { setLoading(false); }
+    } catch {
+      // stats failure is non-critical — the table still shows
+    }
+
+    if (isCurrentMonth) {
+      try {
+        const td = await apiFetch("/api/v1/attendance/today");
+        setTodayStatus(td || { active: false, session: null });
+      } catch {
+        setTodayStatus({ active: false, session: null });
+      }
+    } else {
+      setTodayStatus({ active: false, session: null });
+    }
+
+    setLoading(false);
   }, [cursor, isCurrentMonth]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -575,6 +692,7 @@ export default function MyAttendancePage() {
       `}</style>
 
       <CameraModal open={!!cameraModal} type={cameraModal} onCapture={handlePhotoCaptured} onClose={()=>setCameraModal(null)} />
+      <PhotoPreviewModal photo={previewPhoto} onClose={()=>setPreviewPhoto(null)} />
 
       {/* Toast */}
       {toast && (
@@ -609,6 +727,7 @@ export default function MyAttendancePage() {
 
         {/* ── AI Weekly Summary ── */}
         <div style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:16, padding:"18px 24px", marginBottom:18, boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
+          {/* Header row */}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
               <div style={{ width:40, height:40, borderRadius:"50%", background:"linear-gradient(135deg,#a855f7,#6366f1)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -616,26 +735,137 @@ export default function MyAttendancePage() {
               </div>
               <div>
                 <div style={{ fontSize:15, fontWeight:700, color:"#111827" }}>AI Weekly Summary</div>
-                <div style={{ fontSize:12, color:"#9ca3af", marginTop:2 }}>
-                  {(()=>{ const ws=startOfWeek(now),we=new Date(ws); we.setDate(we.getDate()+6); const f=d=>d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); return `${f(ws)} — ${f(we)} (this week)`; })()}
-                </div>
+                <div style={{ fontSize:12, color:"#9ca3af", marginTop:2 }}>{summaryWeekLabel}</div>
               </div>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <button className="att-arrow"><IconChL /></button>
-              <button className="att-arrow"><IconChR /></button>
-              <button style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 18px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 12px rgba(37,99,235,.25)", transition:"all .2s" }}
-                onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 18px rgba(37,99,235,.3)"; }}
+              <button className="att-arrow" onClick={() => shiftSummaryWeek(-1)} title="Previous week"><IconChL /></button>
+              <button className="att-arrow" onClick={() => shiftSummaryWeek(1)}  title="Next week"><IconChR /></button>
+              <button
+                onClick={generateSummary}
+                disabled={summaryLoading}
+                style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 18px", borderRadius:8, border:"none", background: summaryLoading ? "#93c5fd" : "#2563eb", color:"#fff", fontSize:13, fontWeight:600, cursor: summaryLoading ? "not-allowed" : "pointer", boxShadow:"0 4px 12px rgba(37,99,235,.25)", transition:"all .2s" }}
+                onMouseEnter={e=>{ if(!summaryLoading){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 18px rgba(37,99,235,.3)"; } }}
                 onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 4px 12px rgba(37,99,235,.25)"; }}>
-                <IconStar /> Generate
+                {summaryLoading
+                  ? <><svg style={{animation:"att-spin 1s linear infinite"}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating…</>
+                  : <><IconStar /> {summary ? "Regenerate" : "Generate"}</>
+                }
               </button>
             </div>
           </div>
-          <div style={{ marginTop:20, padding:"28px 20px", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-            <IconStarGray />
-            <div style={{ fontSize:14, fontWeight:500, color:"#374151", textAlign:"center" }}>Generate an AI-powered weekly performance summary.</div>
-            <div style={{ fontSize:13, color:"#9ca3af", textAlign:"center" }}>Tailored to role-specific KPIs · attendance · activities · output.</div>
-          </div>
+
+          {/* Summary content */}
+          {!summary && !summaryLoading && (
+            <div style={{ marginTop:20, padding:"28px 20px", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+              <IconStarGray />
+              <div style={{ fontSize:14, fontWeight:500, color:"#374151", textAlign:"center" }}>Generate an AI-powered weekly performance summary.</div>
+              <div style={{ fontSize:13, color:"#9ca3af", textAlign:"center" }}>Tailored to attendance · tasks · activities · output.</div>
+            </div>
+          )}
+
+          {summaryLoading && (
+            <div style={{ marginTop:20, padding:"28px 20px", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+              <svg style={{animation:"att-spin 1s linear infinite"}} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <div style={{ fontSize:14, color:"#9ca3af" }}>Analysing your week…</div>
+            </div>
+          )}
+
+          {summary && !summaryLoading && (() => {
+            const s = summary;
+            const r = 28;
+            const circ = 2 * Math.PI * r;
+            const offset = circ * (1 - s.score / 100);
+            const scoreColor = s.score >= 70 ? "#16a34a" : s.score >= 45 ? "#f59e0b" : "#dc2626";
+
+            return (
+              <div style={{ marginTop:20 }}>
+                {/* Score + headline */}
+                <div style={{ display:"flex", alignItems:"center", gap:16, padding:"16px 18px", background:"#fafafa", borderRadius:12, marginBottom:16 }}>
+                  {/* Circular score */}
+                  <div style={{ position:"relative", flexShrink:0, width:68, height:68 }}>
+                    <svg width="68" height="68" viewBox="0 0 68 68">
+                      <circle cx="34" cy="34" r={r} fill="none" stroke="#e5e7eb" strokeWidth="6"/>
+                      <circle cx="34" cy="34" r={r} fill="none" stroke={scoreColor} strokeWidth="6"
+                        strokeDasharray={circ} strokeDashoffset={offset}
+                        strokeLinecap="round" transform="rotate(-90 34 34)"
+                        style={{ transition:"stroke-dashoffset .8s ease" }}
+                      />
+                    </svg>
+                    <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:800, color:scoreColor }}>
+                      {s.score}
+                    </div>
+                  </div>
+
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:14, fontWeight:500, color:"#111827", lineHeight:1.5, margin:0 }}>{s.headline}</p>
+                    <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:11, fontWeight:600, padding:"2px 10px", borderRadius:999, background:"#eff6ff", color:"#2563eb", border:"1px solid #bfdbfe" }}>Developer</span>
+                      {s.ai_used && (
+                        <span style={{ fontSize:11, fontWeight:600, padding:"2px 10px", borderRadius:999, background:"#faf5ff", color:"#7c3aed", border:"1px solid #e9d5ff", display:"flex", alignItems:"center", gap:4 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l2.4 7.6H22l-6.2 4.5 2.4 7.6L12 17.2l-6.2 4.5 2.4-7.6L2 9.6h7.6z"/></svg>
+                          AI generated
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:16 }}>
+                  {[
+                    { label:"DAYS PRESENT",  value:`${s.stats.days_present}/${s.stats.working_days}` },
+                    { label:"ON TIME",       value:`${s.stats.on_time_days}/${s.stats.days_present || "—"}` },
+                    { label:"TOTAL HOURS",   value:`${s.stats.total_hours}h` },
+                    { label:"TASKS DONE",    value:String(s.stats.tasks_done) },
+                  ].map(c => (
+                    <div key={c.label} style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:10, padding:"12px 14px" }}>
+                      <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em", color:"#9ca3af", marginBottom:6 }}>{c.label}</div>
+                      <div style={{ fontSize:20, fontWeight:700, color:"#111827" }}>{c.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Highlights */}
+                {s.highlights?.length > 0 && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:700, color:"#111827", marginBottom:8 }}>
+                      <span>🏆</span> Highlights
+                    </div>
+                    {s.highlights.map((h, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:13, color:"#374151", marginBottom:4 }}>
+                        <span style={{ color:"#16a34a", fontWeight:700, flexShrink:0 }}>✓</span> {h}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Concerns */}
+                {s.concerns?.length > 0 && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:700, color:"#111827", marginBottom:8 }}>
+                      <span>⚠️</span> Concerns
+                    </div>
+                    {s.concerns.map((c, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:13, color:"#374151", marginBottom:4 }}>
+                        <span style={{ color:"#d97706", fontWeight:700, flexShrink:0 }}>!</span> {c}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Focus */}
+                {s.focus && (
+                  <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".1em", color:"#2563eb", marginBottom:4 }}>
+                      🎯 Suggested Focus
+                    </div>
+                    <div style={{ fontSize:13, color:"#1e3a5f" }}>{s.focus}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Today card ── */}
@@ -736,7 +966,7 @@ export default function MyAttendancePage() {
                         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                           <IconIn />
                           <span style={{ fontSize:14, color:"#111827", fontWeight:500 }}>{fmtTime(d.checkIn)}</span>
-                          <PhotoBadge src={d.checkInPhoto} label="In" />
+                          <PhotoBadge src={d.checkInPhoto} label="In" onPreview={setPreviewPhoto} />
                         </div>
 
                         {/* Check Out — time + photo */}
@@ -749,7 +979,7 @@ export default function MyAttendancePage() {
                               </Bdg>
                             : <span style={{ fontSize:14, color:"#111827", fontWeight:500 }}>{fmtTime(d.checkOut)}</span>
                           }
-                          {!d.isOpen && <PhotoBadge src={d.checkOutPhoto} label="Out" />}
+                          {!d.isOpen && <PhotoBadge src={d.checkOutPhoto} label="Out" onPreview={setPreviewPhoto} />}
                         </div>
 
                         {/* Total */}

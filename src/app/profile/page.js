@@ -1,6 +1,34 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../../components/client/AuthContext";
+
+// ─── API helpers ────────────────────────────────────────────────────────────
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function authHeaders(extra = {}) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
+}
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...options.headers },
+  });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw err; }
+  return res.json();
+}
+async function apiUpload(path, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: authHeaders(), // no Content-Type — browser sets multipart boundary
+    body: formData,
+  });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw err; }
+  return res.json();
+}
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 function cn(...classes) { return classes.filter(Boolean).join(" "); }
@@ -173,66 +201,110 @@ const Icon = {
   Star: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_PROFILE = {
-  id: "user-1",
-  name: "Sahil",
-  email: "sahil@ezsignly.com",
+// Most of these now persist via PUT /api/v1/auth/me (see auth_models.py /
+// auth_endpoints.py extended fields). avatar_url and company are still NOT
+// user-editable/persisted — avatar needs a dedicated upload endpoint, and
+// company is admin-set.
+const EXTRA_FIELD_DEFAULTS = {
+  personal_email: "",
   phone: "",
+  date_of_birth: "",
+  gender: "",
+  job_title: "",
+  designation: "",
+  company: "",
+  address: "",
+  bio: "",
+  avatar_url: null,
   emergency_contact_name: "",
   emergency_contact_phone: "",
   emergency_contact_relation: "",
-  address: "",
-  date_of_birth: "",
-  avatar_url: null,
-  job_title: "",
-  designation: "",
-  company: "EzSignly",
-  bio: "",
-  gender: "",
-  personal_email: "",
 };
-const MOCK_ROLE = "developer";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const fileRef = useRef(null);
   const toast = useToast();
+  const { user, refreshUser } = useAuth(); // refreshUser may not exist on every AuthContext — guarded below
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [p, setP] = useState(null);
-  const role = MOCK_ROLE;
 
   useEffect(() => {
-    setTimeout(() => { setP(MOCK_PROFILE); setLoading(false); }, 400);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await apiFetch("/api/v1/auth/me");
+        if (!cancelled) setP({ ...EXTRA_FIELD_DEFAULTS, ...data });
+      } catch (e) {
+        if (!cancelled) {
+          toast.error("Failed to load profile");
+          // Fall back to whatever AuthContext already has, so the page isn't empty
+          if (user) setP({ ...EXTRA_FIELD_DEFAULTS, ...user });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const role = p?.role || user?.role || "member";
 
   const update = (k, v) => { if (!p) return; setP({ ...p, [k]: v }); };
 
   const handleSave = async () => {
     if (!p) return;
-    if (!p.name?.trim()) return toast.error("Name is required");
-    if (p.name.length > 100) return toast.error("Name too long");
-    if (p.phone && p.phone.length > 30) return toast.error("Phone too long");
-    if (p.personal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.personal_email.trim())) {
-      return toast.error("Enter a valid personal email");
+    if (!p.full_name?.trim()) return toast.error("Name is required");
+    if (p.full_name.length > 100) return toast.error("Name too long");
+    if (p.username && (p.username.length < 3 || p.username.length > 50)) {
+      return toast.error("Username must be 3–50 characters");
     }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    toast.success("Profile updated");
+    try {
+      const updated = await apiFetch("/api/v1/auth/me", {
+        method: "PUT",
+        body: JSON.stringify({
+          full_name: p.full_name,
+          username: p.username,
+          personal_email: p.personal_email || null,
+          phone: p.phone || null,
+          date_of_birth: p.date_of_birth || null,
+          gender: p.gender || null,
+          job_title: p.job_title || null,
+          designation: p.designation || null,
+          address: p.address || null,
+          bio: p.bio || null,
+          emergency_contact_name: p.emergency_contact_name || null,
+          emergency_contact_phone: p.emergency_contact_phone || null,
+          emergency_contact_relation: p.emergency_contact_relation || null,
+        }),
+      });
+      setP(prev => ({ ...prev, ...updated }));
+      if (typeof refreshUser === "function") await refreshUser();
+      toast.success("Profile updated");
+    } catch (e) {
+      toast.error(e?.detail || "Failed to save profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
+  // Avatar upload has no backend endpoint yet — preview locally only.
   const handleAvatarUpload = async (file) => {
     if (file.size > 5 * 1024 * 1024) return toast.error("Image must be under 5MB");
     if (!file.type.startsWith("image/")) return toast.error("Please upload an image");
     setUploading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    const url = URL.createObjectURL(file);
-    setP(prev => prev ? { ...prev, avatar_url: url } : prev);
-    setUploading(false);
-    toast.success("Profile picture updated");
+    try {
+      const localUrl = URL.createObjectURL(file);
+      setP(prev => prev ? { ...prev, avatar_url: localUrl } : prev);
+      toast.error("Avatar upload isn't saved yet — backend endpoint needed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (loading || !p) {
@@ -243,7 +315,8 @@ export default function ProfilePage() {
     );
   }
 
-  const initial = (p.name || p.email)?.[0]?.toUpperCase() ?? "?";
+  const displayName = p.full_name ?? "";
+  const initial = (displayName || p.email)?.[0]?.toUpperCase() ?? "?";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-24">
@@ -262,9 +335,9 @@ export default function ProfilePage() {
         <CardContent className="flex flex-col sm:flex-row items-center gap-6 pt-6">
           <div className="relative shrink-0">
             {p.avatar_url ? (
-              <img src={p.avatar_url} alt={p.name || ""} className="h-28 w-28 rounded-full object-cover border-4 border-blue-100 shadow-lg" />
+              <img src={p.avatar_url} alt={displayName} className="h-28 w-28 rounded-full object-cover border-4 border-blue-100 shadow-lg" />
             ) : (
-              <div className={cn("h-28 w-28 rounded-full flex items-center justify-center border-4 border-blue-100 shadow-lg text-white text-4xl font-bold", avatarColor(p.name))}>
+              <div className={cn("h-28 w-28 rounded-full flex items-center justify-center border-4 border-blue-100 shadow-lg text-white text-4xl font-bold", avatarColor(displayName))}>
                 {initial}
               </div>
             )}
@@ -283,7 +356,7 @@ export default function ProfilePage() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.target.value = ""; }} />
           </div>
           <div className="text-center sm:text-left flex-1">
-            <h2 className="text-xl font-semibold text-gray-900">{p.name || "Unnamed"}</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{displayName || "Unnamed"}</h2>
             <p className="text-sm text-gray-500 flex items-center justify-center sm:justify-start gap-1.5 mt-1">
               <Icon.Mail className="h-3.5 w-3.5" /> {p.email}
             </p>
@@ -306,14 +379,19 @@ export default function ProfilePage() {
 
             <div>
               <Label htmlFor="name">Full name *</Label>
-              <Input id="name" value={p.name ?? ""} maxLength={100} onChange={e => update("name", e.target.value)} />
+              <Input
+                id="name"
+                value={p.full_name ?? ""}
+                maxLength={100}
+                onChange={e => update("full_name", e.target.value)}
+              />
             </div>
 
             <div>
               <Label htmlFor="email">
                 <span className="inline-flex items-center gap-1"><Icon.Mail className="h-3.5 w-3.5 inline" /> Company email</span>
               </Label>
-              <Input id="email" value={p.email} disabled />
+              <Input id="email" value={p.email ?? ""} disabled />
               <p className="mt-1 text-xs text-gray-400">Set by admin. Used to sign in.</p>
             </div>
 
@@ -467,18 +545,28 @@ export default function ProfilePage() {
 
 // ─── Change Password Card ─────────────────────────────────────────────────────
 function ChangePasswordCard({ toast }) {
+  const [pwCurrent, setPwCurrent] = useState("");
   const [pw1, setPw1] = useState("");
   const [pw2, setPw2] = useState("");
   const [saving, setSaving] = useState(false);
 
   const onSave = async () => {
-    if (pw1.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!pwCurrent) return toast.error("Enter your current password");
+    if (pw1.length < 6) return toast.error("New password must be at least 6 characters");
     if (pw1 !== pw2) return toast.error("Passwords do not match");
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    setPw1(""); setPw2("");
-    toast.success("Password updated");
+    try {
+      await apiFetch("/api/v1/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password: pwCurrent, new_password: pw1 }),
+      });
+      toast.success("Password updated");
+      setPwCurrent(""); setPw1(""); setPw2("");
+    } catch (e) {
+      toast.error(e?.detail || "Failed to update password");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -492,9 +580,13 @@ function ChangePasswordCard({ toast }) {
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="pw-current">Current password</Label>
+            <Input id="pw-current" type="password" value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} />
+          </div>
           <div>
             <Label htmlFor="pw1">New password</Label>
-            <Input id="pw1" type="password" value={pw1} onChange={e => setPw1(e.target.value)} placeholder="At least 8 characters" />
+            <Input id="pw1" type="password" value={pw1} onChange={e => setPw1(e.target.value)} placeholder="At least 6 characters" />
           </div>
           <div>
             <Label htmlFor="pw2">Confirm new password</Label>
@@ -503,7 +595,7 @@ function ChangePasswordCard({ toast }) {
           <div className="sm:col-span-2 flex justify-end">
             <button
               onClick={onSave}
-              disabled={saving || !pw1 || !pw2}
+              disabled={saving || !pwCurrent || !pw1 || !pw2}
               className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
             >
               {saving

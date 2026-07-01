@@ -17,8 +17,13 @@ async function apiFetch(path, options = {}) {
     ...options,
     headers: { ...authHeaders(), ...options.headers },
   });
-  if (!res.ok) throw await res.json();
-  return res.json();
+  // Some endpoints (e.g. DELETE → 204 No Content) return no body at all.
+  // Calling res.json() unconditionally throws "Unexpected end of JSON input"
+  // on those, so read as text first and only parse if there's something there.
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw (data || { detail: res.statusText || "Request failed" });
+  return data;
 }
 
 const TaskContext = createContext(null);
@@ -73,12 +78,15 @@ export function TaskProvider({ children }) {
     return newTask;
   }, []);
 
+  // Backend only registers PUT /api/v1/tasks/{id} for general updates
+  // (PATCH on that path doesn't exist — PATCH is reserved for /{id}/status).
   const updateTask = useCallback(async (id, patch) => {
     const updated = await apiFetch(`/api/v1/tasks/${id}`, {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify(patch),
     });
     setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    return updated;
   }, []);
 
   const deleteTask = useCallback(async (id) => {

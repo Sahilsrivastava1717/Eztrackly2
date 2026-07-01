@@ -183,11 +183,13 @@ function NavCameraModal({ open, type, onCapture, onClose }) {
   const streamRef = useRef(null);
   const [phase, setPhase] = useState("loading"); // "loading"|"live"|"captured"|"error"
   const [captured, setCaptured] = useState(null);
+  const [workFrom, setWorkFrom] = useState("office"); // "office"|"wfh"
 
   useEffect(() => {
     if (!open) return;
     setPhase("loading");
     setCaptured(null);
+    setWorkFrom("office");
 
     let cancelled = false;
     navigator.mediaDevices
@@ -328,6 +330,55 @@ function NavCameraModal({ open, type, onCapture, onClose }) {
           )}
         </div>
 
+        {/* ── Work location selector (only on checkin, before capture) ── */}
+        {isIn && phase !== "captured" && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: ".08em", color: "#9ca3af", marginBottom: 10,
+            }}>
+              Where are you working from?
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { val: "office", label: "Office", icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                  </svg>
+                )},
+                { val: "wfh", label: "WFH", icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                  </svg>
+                )},
+              ].map((opt) => (
+                <button
+                  key={opt.val}
+                  onClick={() => setWorkFrom(opt.val)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 9,
+                    padding: "11px 16px", borderRadius: 10,
+                    border: workFrom === opt.val ? "2px solid #2563eb" : "1.5px solid #e5e7eb",
+                    background: workFrom === opt.val ? "#eff6ff" : "#fff",
+                    color: workFrom === opt.val ? "#2563eb" : "#374151",
+                    fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    transition: "all .15s",
+                  }}
+                >
+                  <div style={{
+                    width: 16, height: 16, borderRadius: "50%",
+                    border: workFrom === opt.val ? "5px solid #2563eb" : "1.5px solid #d1d5db",
+                    background: "#fff", flexShrink: 0, transition: "all .15s",
+                  }} />
+                  <span style={{ color: workFrom === opt.val ? "#2563eb" : "#6b7280" }}>{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <canvas ref={canvasRef} style={{ display: "none" }} />
 
         {phase !== "captured" ? (
@@ -357,7 +408,7 @@ function NavCameraModal({ open, type, onCapture, onClose }) {
             }}>
               Retake
             </button>
-            <button onClick={() => onCapture(captured)} style={{
+            <button onClick={() => onCapture(captured, workFrom)} style={{
               flex: 2, padding: "12px", borderRadius: 10, border: "none",
               background: isIn ? "#16a34a" : "#2563eb",
               color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
@@ -376,14 +427,13 @@ function NavCameraModal({ open, type, onCapture, onClose }) {
 }
 
 // ─── Navbar Attendance Badge (Check in / In since.../Out) ────────────────────
-// ─── Navbar Attendance Badge (Check in / In since.../Out) ────────────────────
 function AttendanceStatusBadge() {
   const [status, setStatus] = useState({ active: false, session: null });
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null); // "checkin" | "checkout" | null
   const [showStandup, setShowStandup] = useState(false);
   const [showWrapup, setShowWrapup] = useState(false);
-  const [pendingCheckoutPhoto, setPendingCheckoutPhoto] = useState(null);
+  const [pendingRecap, setPendingRecap] = useState(null);
   const [standupPriorities, setStandupPriorities] = useState([]);
 
   const { tasks, updateTask } = useTasks();
@@ -407,8 +457,8 @@ function AttendanceStatusBadge() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Photo captured from NavCameraModal
-  const handleCapture = async (photoDataUrl) => {
+  // Photo (and workFrom, on checkin) captured from NavCameraModal
+  const handleCapture = async (photoDataUrl, workFrom) => {
     const mode = modal;
     setModal(null);
 
@@ -417,7 +467,7 @@ function AttendanceStatusBadge() {
       try {
         await apiFetch("/api/v1/attendance/checkin", {
           method: "POST",
-          body: JSON.stringify({ photo_url: photoDataUrl }),
+          body: JSON.stringify({ photo_url: photoDataUrl, work_from: workFrom }),
         });
         await refresh();
         setShowStandup(true); // ask for today's priorities right after checking in
@@ -427,19 +477,19 @@ function AttendanceStatusBadge() {
         setLoading(false);
       }
     } else if (mode === "checkout") {
-      // Don't call the API yet — show the wrap-up recap first
-      setPendingCheckoutPhoto(photoDataUrl);
-      setShowWrapup(true);
+      // Wrap-up recap was already collected before the camera opened — finalize now
+      await finalizeCheckout(photoDataUrl, pendingRecap);
+      setPendingRecap(null);
     }
   };
 
-  const finalizeCheckout = async (recap) => {
+  const finalizeCheckout = async (photoDataUrl, recap) => {
     setLoading(true);
     try {
       await apiFetch("/api/v1/attendance/checkout", {
         method: "POST",
         body: JSON.stringify({
-          photo_url: pendingCheckoutPhoto,
+          photo_url: photoDataUrl,
           ...(recap || {}),
         }),
       });
@@ -454,9 +504,19 @@ function AttendanceStatusBadge() {
       // optionally surface a toast here
     } finally {
       setLoading(false);
-      setPendingCheckoutPhoto(null);
-      setShowWrapup(false);
     }
+  };
+
+  // Wrap-up submitted/skipped → now open the camera to capture the checkout photo
+  const handleWrapupSubmit = async (recap) => {
+    setPendingRecap(recap);
+    setShowWrapup(false);
+    setModal("checkout");
+  };
+  const handleWrapupSkip = () => {
+    setPendingRecap(null);
+    setShowWrapup(false);
+    setModal("checkout");
   };
 
   const handleStandupSubmit = async (priorities) => {
@@ -487,8 +547,8 @@ function AttendanceStatusBadge() {
         open={showWrapup}
         dueTasks={dueToday}
         standupPriorities={standupPriorities}
-        onSubmit={finalizeCheckout}
-        onSkip={() => finalizeCheckout(null)}
+        onSubmit={handleWrapupSubmit}
+        onSkip={handleWrapupSkip}
       />
 
       {status.active ? (
@@ -500,7 +560,7 @@ function AttendanceStatusBadge() {
             In since {fmtTime(status.session?.login_at)}
           </span>
           <button
-            onClick={() => setModal("checkout")}
+            onClick={() => setShowWrapup(true)}
             disabled={loading}
             className="ez-nav-btn"
             style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 999, border: "1px solid #d1d5db", background: "#fff", padding: "3px 10px", fontSize: 12, fontWeight: 700, color: "#374151", cursor: loading ? "not-allowed" : "pointer" }}

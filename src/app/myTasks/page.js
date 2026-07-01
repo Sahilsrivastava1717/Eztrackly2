@@ -142,8 +142,48 @@ function TaskModal({ open, onClose, editTask, onSave }) {
   });
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [teammates, setTeammates] = useState([]);
+  const [refining, setRefining] = useState(false);
   const priorityRef = useRef(null);
   const assignRef = useRef(null);
+
+  const handleAIRefine = async () => {
+    if (!form.title.trim()) return;
+    setRefining(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/ai/refine`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ title: form.title, description: form.description }),
+        }
+      );
+      const data = await res.json();
+      if (data.refined) setForm(f => ({ ...f, description: data.refined }));
+    } catch {
+      // silently fail — user still has their original text
+    } finally {
+      setRefining(false);
+    }
+  };
+
+  // Load real teammates from the same email domain
+  useEffect(() => {
+    if (!open) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/chat/teammates`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setTeammates(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [open]);
 
   useEffect(() => {
     if (editTask) {
@@ -177,10 +217,13 @@ function TaskModal({ open, onClose, editTask, onSave }) {
     { value: "urgent", label: "Urgent" },
   ];
 
+  // Build assign options: always "Myself" first, then real same-domain teammates
   const ASSIGN_OPTIONS = [
-    { value: "self",       label: "Myself" },
-    { value: "teammate1",  label: "Teammate 1" },
-    { value: "teammate2",  label: "Teammate 2" },
+    { value: "self", label: "Myself" },
+    ...teammates.map((t) => ({
+      value: t.id,
+      label: t.name || t.username || t.email,
+    })),
   ];
 
   const selectedPriority = PRIORITY_OPTIONS.find((p) => p.value === form.priority);
@@ -199,7 +242,7 @@ function TaskModal({ open, onClose, editTask, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <button
           onClick={onClose}
@@ -230,11 +273,27 @@ function TaskModal({ open, onClose, editTask, onSave }) {
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-xs font-medium text-gray-700">Description</label>
-              <button type="button" className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-blue-500 hover:bg-blue-50 transition-colors">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-                </svg>
-                AI refine
+              <button
+                type="button"
+                onClick={handleAIRefine}
+                disabled={refining || !form.title.trim()}
+                className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {refining ? (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                    Refining…
+                  </>
+                ) : (
+                  <>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    AI refine
+                  </>
+                )}
               </button>
             </div>
             <textarea
@@ -513,7 +572,10 @@ function TaskRow({ t, onEdit, onDelete, onMarkDone, onSetStatus }) {
               <span className={cn("font-medium text-gray-900", isDone && "line-through text-gray-400")}>{t.title}</span>
               <Badge className={cn("capitalize", PRIO_COLORS[t.priority])}>{t.priority}</Badge>
               <Badge className={STATUS_META[t.status]?.color}>{STATUS_META[t.status]?.label}</Badge>
-              <Badge className="bg-gray-50 text-gray-500 border-gray-200">Self</Badge>
+              {t.assigned_to_name
+                ? <Badge className="bg-purple-50 text-purple-600 border-purple-200">→ {t.assigned_to_name}</Badge>
+                : <Badge className="bg-gray-50 text-gray-500 border-gray-200">Self</Badge>
+              }
             </div>
 
             {t.description && <p className="mt-1 text-sm text-gray-500 whitespace-pre-wrap">{t.description}</p>}
@@ -656,8 +718,21 @@ export default function TasksPage() {
   const [editTask, setEditTask] = useState(null);
   const [doneTarget, setDoneTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [drawerOpen, setDrawerOpen] = useState(false); // ← ADDED for FAB
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [delegatedTasks, setDelegatedTasks] = useState([]);
   const searchRef = useRef(null);
+
+  // Load tasks assigned BY the current user to someone else
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/tasks/assigned-by-me`, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    })
+      .then((r) => r.ok ? r.json() : { tasks: [] })
+      .then((data) => setDelegatedTasks(Array.isArray(data.tasks) ? data.tasks : []))
+      .catch(() => {});
+  }, [loaded]); // re-fetch whenever the main tasks reload (e.g. after creating a delegated task)
 
   useEffect(() => {
     const handler = (e) => {
@@ -672,6 +747,12 @@ export default function TasksPage() {
 
   const PRIO_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+  // NOTE: currentUser is included in the dependency array below. Without it,
+  // a hard refresh would compute `filtered` once while currentUser is still
+  // null/loading (AuthContext hasn't resolved yet), filter out every task,
+  // and then NEVER recompute once currentUser actually loads a moment later
+  // — leaving the page stuck showing zero tasks until the user navigated
+  // away and back (remounting the component with currentUser already set).
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = tasks.filter((t) => t.assigned_to === "self" || t.assigned_to === currentUser?.id);
@@ -687,29 +768,32 @@ export default function TasksPage() {
       return 0;
     });
     return list;
-  }, [tasks, search, priorityFilter, sortBy]);
+  }, [tasks, search, priorityFilter, sortBy, currentUser]);
 
   const buckets = useMemo(() => {
     const open = filtered.filter((t) => t.status !== "done" && t.status !== "cancelled");
     return {
-      overdue:   open.filter((t) => isOverdue(t) && !isToday(t.due_date)),
+      overdue:   open.filter((t) => isOverdue(t) || isToday(t.due_date)),
       today:     open.filter((t) => isToday(t.due_date)),
       upcoming:  open.filter((t) => isUpcoming(t) && !isToday(t.due_date)),
       all:       open,
       history:   filtered.filter((t) => t.status === "done" || t.status === "cancelled"),
-      delegated: tasks.filter((t) => t.assigned_to !== "self" && t.assigned_to !== currentUser?.id),
+      // Tasks the current user delegated to others — fetched separately from
+      // GET /api/v1/tasks/assigned-by-me, so they appear here even though
+      // they're not in the user's own inbox (GET /api/v1/tasks).
+      delegated: delegatedTasks,
     };
-  }, [filtered, tasks, currentUser]);
+  }, [filtered, delegatedTasks]);
 
   const totals = useMemo(() => {
-    const mine = tasks.filter((t) => t.assigned_to === "self");
+    const mine = tasks.filter((t) => t.assigned_to === "self" || t.assigned_to === currentUser?.id);
     return {
       open:       mine.filter((t) => t.status !== "done" && t.status !== "cancelled").length,
       inProgress: mine.filter((t) => t.status === "in_progress").length,
       overdue:    mine.filter((t) => isOverdue(t)).length,
       done:       mine.filter((t) => t.status === "done").length,
     };
-  }, [tasks]);
+  }, [tasks, currentUser]);
 
   const handleSave = (payload) => { if (editTask) { updateTask(editTask.id, payload); } else { addTask(payload); } };
   const handleMarkDone = (task) => { if (!task) return; setDoneTarget(task); };
