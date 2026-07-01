@@ -538,20 +538,39 @@ export default function MyAttendancePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    // Fetch sessions, stats, and today's status independently — if stats
-    // fails, sessions (the main table) still loads correctly.
+
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth() + 1;
+
+    // When we're in the first 6 days of the current month (IST), the current
+    // week may have started in the previous month. Fetch both months and merge
+    // so the daily table shows the complete week without the user needing to
+    // manually navigate back.
+    const todayIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Calcutta" }));
+    const dayOfMonth = todayIST.getDate();
+    const needsPrevMonth = isCurrentMonth && dayOfMonth <= 6;
+
     try {
-      const sess = await apiFetch(
-        `/api/v1/attendance/sessions?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`
-      );
-      setSessions(Array.isArray(sess) ? sess : []);
+      const sessionPromises = [
+        apiFetch(`/api/v1/attendance/sessions?year=${y}&month=${m}`),
+      ];
+      if (needsPrevMonth) {
+        const prevY = m === 1 ? y - 1 : y;
+        const prevM = m === 1 ? 12 : m - 1;
+        sessionPromises.push(
+          apiFetch(`/api/v1/attendance/sessions?year=${prevY}&month=${prevM}`)
+        );
+      }
+      const results = await Promise.all(sessionPromises);
+      const allSessions = results.flat().filter(Boolean);
+      setSessions(allSessions);
     } catch {
       showToast("Failed to load attendance sessions", false);
     }
 
     try {
       const st = await apiFetch(
-        `/api/v1/attendance/stats?year=${cursor.getFullYear()}&month=${cursor.getMonth()+1}`
+        `/api/v1/attendance/stats?year=${y}&month=${m}`
       );
       setStats(st);
     } catch {

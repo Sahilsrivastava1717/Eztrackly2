@@ -20,7 +20,7 @@ function StatCard({ label, value, icon, accent }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-600">{label}</span>
         <span className={accent}>{icon}</span>
       </div>
       <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
@@ -673,9 +673,9 @@ function Section({ items, empty, onEdit, onDelete, onMarkDone, onSetStatus, show
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" className="mb-3">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
           </svg>
-          <p className="text-sm text-gray-400">{empty}</p>
+          <p className="text-sm text-gray-800">{empty}</p>
           {showAdd && (
-            <button onClick={onAdd} className="mt-4 flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+            <button onClick={onAdd} className="mt-4 flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-black hover:bg-blue-200">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
@@ -836,7 +836,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-20">
+    <div className="mx-auto max-w-5xl space-y-5 pt-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -847,7 +847,7 @@ export default function TasksPage() {
             </svg>
             My tasks
           </h1>
-          <p className="mt-1 text-sm text-gray-400">Plan your day, track progress, keep a full history.</p>
+          <p className="mt-1 text-md text-gray-600">Plan your day, track progress, keep a full history.</p>
         </div>
         {/* "Add task" header button → opens TaskModal (full form) */}
         <button
@@ -880,7 +880,7 @@ export default function TasksPage() {
       {/* Filter row */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
@@ -888,7 +888,7 @@ export default function TasksPage() {
             placeholder="Search tasks…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-lg border text-gray-700 border-gray-200 bg-white pl-9 pr-12 text-sm outline-none focus:border-blue-200 focus:ring-2 focus:ring-blue-50"
+            className="h-10 w-full rounded-lg border text-gray-800 border-gray-200 bg-white pl-9 pr-12 text-sm outline-none focus:border-blue-200 focus:ring-2 focus:ring-blue-50"
           />
           <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-mono text-gray-400">/</kbd>
         </div>
@@ -906,7 +906,7 @@ export default function TasksPage() {
 
       {/* Tabs */}
       <div>
-        <div className="flex flex-wrap gap-1 rounded-xl border border-gray-100 bg-gray-100/60 p-1">
+        <div className="flex flex-wrap gap-6 rounded-xl border border-gray-100 bg-gray-100/60 p-1">
           {TABS.map((t) => {
             const count = buckets[t.id]?.length ?? 0;
             const active = tab === t.id;
@@ -914,7 +914,7 @@ export default function TasksPage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all", active ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+                className={cn("flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all", active ? "bg-white text-gray-800 shadow-sm" : "text-black hover:text-black")}
               >
                 <span>{t.icon}</span>
                 {t.label}

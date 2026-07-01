@@ -43,7 +43,7 @@ function StatCard({ label, value, gradient, icon }) {
         gradient
       )} />
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-800">{label}</span>
         <div className={cn(
           "flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3",
           gradient
@@ -194,7 +194,6 @@ function DashboardContent() {
   const recentDone = myTasks.filter((t) => t.status === "done").slice(0, 5);
 
   // Display name from auth
-  // Display name from auth
   const rawName = user?.full_name?.split(" ")[0] || user?.username || "there";
   const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
@@ -233,7 +232,7 @@ function DashboardContent() {
         {/* ── Header ── */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-800">
               Developer Workspace
             </p>
             <h1 className="mt-1 flex flex-wrap items-center gap-2 text-3xl font-bold tracking-tight text-gray-900">
@@ -249,7 +248,7 @@ function DashboardContent() {
                 {status.text}
               </span>
             </h1>
-            <p className="mt-1.5 text-sm text-gray-500">
+            <p className="mt-1.5 text-sm text-gray-800">
               {dueToday.length > 0
                 ? `You have ${dueToday.length} task${dueToday.length === 1 ? "" : "s"} due today.`
                 : "No tasks due today."}
@@ -294,7 +293,7 @@ function DashboardContent() {
                   {dueToday.length}
                 </span>
               </div>
-              <Link href="/myTasks" className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600">
+              <Link href="/myTasks"  className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium text-gray-800 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700">
                 View all
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="9 18 15 12 9 6" />
@@ -303,7 +302,7 @@ function DashboardContent() {
             </div>
             <div className="divide-y divide-gray-50">
               {dueToday.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm text-gray-400">Nothing due today. 🎯</div>
+                <div className="px-5 py-10 text-center text-sm text-gray-800">Nothing due today. 🎯</div>
               )}
               {dueToday.map((t) => (
                 <div key={t.id} className="px-5 py-3.5 hover:bg-gray-50 transition-colors">
@@ -338,7 +337,7 @@ function DashboardContent() {
             </div>
             <div className="divide-y divide-gray-50">
               {upcoming.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm text-gray-400">No upcoming tasks scheduled.</div>
+                <div className="px-5 py-10 text-center text-sm text-gray-800">No upcoming tasks scheduled.</div>
               )}
               {upcoming.map((t) => (
                 <div key={t.id} className="px-5 py-3.5 hover:bg-gray-50 transition-colors">
@@ -366,7 +365,7 @@ function DashboardContent() {
               </svg>
               <h3 className="font-semibold text-gray-900">Recently completed</h3>
             </div>
-            <Link href="/myTasks" className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600">
+            <Link href="/myTasks" className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium text-gray-800 transition-all duration-200 hover:bg-blue-100 hover:text-blue-700">
               History
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 18 15 12 9 6" />
@@ -375,7 +374,7 @@ function DashboardContent() {
           </div>
           <div className="divide-y divide-gray-50">
             {recentDone.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-gray-400">No completed tasks yet.</div>
+              <div className="px-5 py-10 text-center text-sm text-gray-800">No completed tasks yet.</div>
             )}
             {recentDone.map((t) => (
               <div key={t.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">

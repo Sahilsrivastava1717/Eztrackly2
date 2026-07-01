@@ -621,11 +621,11 @@ function ContentPageContent() {
         <div className="absolute -right-20 -top-20 h-60 w-60 rounded-full bg-blue-500/10 blur-[80px]" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Workspace</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-800">Workspace</p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-gray-900 md:text-3xl">
               Content <span className="text-blue-500">studio</span>
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-800">
               {docs.length} {docs.length === 1 ? "document" : "documents"} · drafts, social posts and website copy.
             </p>
           </div>
@@ -657,7 +657,7 @@ function ContentPageContent() {
                 </div>
                 <span className="text-xl font-bold text-gray-300">{count}</span>
               </div>
-              <div className="mt-2 text-sm font-semibold text-gray-900">{meta.label}</div>
+              <div className="mt-2 text-sm font-semibold text-gray-800">{meta.label}</div>
               <div className="text-xs text-gray-400">{count === 1 ? "document" : "documents"}</div>
             </button>
           );
@@ -668,10 +668,10 @@ function ContentPageContent() {
       <div className="flex flex-wrap items-center gap-2">
         {SCOPE_TABS.map((t) => (
           <button key={t.v} onClick={() => setScope(t.v)}
-            className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all",
+            className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all",
               scope === t.v
                 ? "border-blue-300 bg-blue-50 text-blue-600 shadow-sm"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300")}>
+                : "border-gray-200 bg-white text-black-800 hover:bg-blue-200 hover:border-blue-200")}>
             {t.label}
             {t.badge > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
@@ -694,8 +694,8 @@ function ContentPageContent() {
               className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm text-gray-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-50" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-gray-300 transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
+            <button className="flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-800">
                 <rect x="3" y="4" width="18" height="18" rx="2"/>
                 <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
                 <line x1="3" y1="10" x2="21" y2="10"/>
@@ -706,10 +706,10 @@ function ContentPageContent() {
             <CustomDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS}
               prefix={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>}
               width="w-44" />
-            <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+            <div className="inline-flex items-center rounded-lg border border-gray-600 bg-white p-0.5 shadow-sm">
               <button onClick={() => setView("list")}
                 className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-                  view === "list" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600")} title="List view">
+                  view === "list" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-800")} title="List view">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
                   <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
@@ -769,7 +769,7 @@ function ContentPageContent() {
                 <polyline points="14 2 14 8 20 8"/>
               </svg>
             </div>
-            <p className="mt-4 text-sm font-semibold text-gray-700">
+            <p className="mt-4 text-sm font-semibold text-gray-800">
               {activeFilterCount > 0 ? "No documents match your filters" : "No documents yet"}
             </p>
             <p className="mt-1 text-xs text-gray-400">

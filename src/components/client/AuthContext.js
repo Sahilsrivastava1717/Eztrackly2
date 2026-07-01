@@ -14,6 +14,8 @@ function setToken(token) {
 function clearToken() {
   localStorage.removeItem("token");
   localStorage.removeItem("refresh_token");
+  // Clear the 10-hour session timer so the auto-logout hook resets correctly
+  localStorage.removeItem("auth_login_time");
   window.dispatchEvent(new StorageEvent("storage", { key: "token", newValue: null }));
 }
 
@@ -51,7 +53,6 @@ export function AuthProvider({ children }) {
     })
       .then(async (r) => {
         if (r.status === 401) {
-          // Token expired — try refresh
           const newToken = await tryRefresh();
           if (!newToken) { clearToken(); return null; }
           const r2 = await fetch(`${API_BASE}/api/v1/auth/me`, {
@@ -66,7 +67,7 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Auto-refresh token every 25 minutes (before 30min expiry)
+  // Auto-refresh token every 25 minutes (before 30 min expiry)
   useEffect(() => {
     const interval = setInterval(async () => {
       const token = localStorage.getItem("token");
@@ -91,6 +92,8 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.detail || "Login failed");
     setToken(data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    // Stamp the login time so the 10-hour auto-logout timer starts from here
+    localStorage.setItem("auth_login_time", Date.now().toString());
     setUser(data.user);
     router.push("/dashboard");
   };
@@ -105,12 +108,14 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.detail || "Registration failed");
     setToken(data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    // Stamp the login time so the 10-hour auto-logout timer starts from here
+    localStorage.setItem("auth_login_time", Date.now().toString());
     setUser(data.user);
     router.push("/dashboard");
   };
 
   const logout = () => {
-    clearToken();
+    clearToken(); // also removes auth_login_time
     setUser(null);
     router.push("/auth");
   };
