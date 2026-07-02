@@ -420,7 +420,7 @@ function AttendanceStatusBadge() {
   const [pendingRecap, setPendingRecap] = useState(null);
   const [standupPriorities, setStandupPriorities] = useState([]);
 
-  const { tasks, updateTask } = useTasks();
+  const { tasks, updateTask, loadTasks } = useTasks();
   const dueToday = (tasks || []).filter(
     (t) => t.status !== "done" && t.status !== "cancelled" && isToday(t.due_date)
   );
@@ -475,7 +475,12 @@ function AttendanceStatusBadge() {
   const handleWrapupSkip  = ()               => { setPendingRecap(null); setShowWrapup(false); setModal("checkout"); };
   const handleStandupSubmit = async (priorities) => {
     setStandupPriorities(priorities);
-    try { await apiFetch("/api/v1/attendance/standup", { method: "POST", body: JSON.stringify({ priorities }) }); } catch {}
+    try {
+      await apiFetch("/api/v1/attendance/standup", { method: "POST", body: JSON.stringify({ priorities }) });
+      // Standup priorities are now real Task documents (tagged source: "standup")
+      // — reload TaskContext so My Tasks / WrapUp modal see them immediately.
+      loadTasks?.();
+    } catch {}
     finally { setShowStandup(false); }
   };
 

@@ -155,11 +155,19 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
   const [checkedIds, setCheckedIds] = useState(new Set());
 
   const tasksByOrigin = useMemo(() => {
-    if (!standupPriorities?.length) return { setByYou: dueTasks, other: [] };
+    // Prefer the reliable backend-tagged source over guessing by title text.
+    // Tasks created from the morning standup are tagged source === "standup"
+    // by the /api/v1/attendance/standup endpoint.
+    const setByYou = dueTasks.filter((t) => t.source === "standup");
+    const other = dueTasks.filter((t) => t.source !== "standup");
+    if (setByYou.length > 0 || !standupPriorities?.length) return { setByYou, other };
+
+    // Fallback for older tasks created before the source field existed —
+    // fuzzy-match by title against this morning's typed priorities.
     const lower = standupPriorities.map((p) => p.toLowerCase().trim());
-    const setByYou = dueTasks.filter((t) => lower.includes((t.title || "").toLowerCase().trim()));
-    const other = dueTasks.filter((t) => !setByYou.includes(t));
-    return { setByYou, other };
+    const fallbackSetByYou = dueTasks.filter((t) => lower.includes((t.title || "").toLowerCase().trim()));
+    const fallbackOther = dueTasks.filter((t) => !fallbackSetByYou.includes(t));
+    return { setByYou: fallbackSetByYou, other: fallbackOther };
   }, [dueTasks, standupPriorities]);
 
   if (!open) return null;
@@ -277,6 +285,33 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
             </p>
           </div>
 
+
+          {/* Today's plan — every task due today, whichever page it was added from
+              (morning standup or the standalone My Tasks / quick-add drawer) */}
+          {dueTasks.length > 0 && (
+            <div style={{
+              border: "1.5px dashed #c4b5fd", background: "#f5f3ff", borderRadius: 12,
+              padding: "12px 14px", marginBottom: 14,
+            }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontSize: 11, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8,
+              }}>
+                <span>🎯 Today's plan</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {dueTasks.map((t, i) => (
+                  <div key={t.id ?? i} style={{
+                    fontSize: 13.5, color: "#374151",
+                    textDecoration: t.status === "done" ? "line-through" : "none",
+                    opacity: t.status === "done" ? 0.55 : 1,
+                  }}>
+                    {i + 1}. {t.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Tasks due today */}
           {dueTasks.length > 0 && (
