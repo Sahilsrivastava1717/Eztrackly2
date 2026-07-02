@@ -153,6 +153,8 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
   const [mood, setMood] = useState("good");
   const [saving, setSaving] = useState(false);
   const [checkedIds, setCheckedIds] = useState(new Set());
+  const [skipHover, setSkipHover] = useState(false);
+  const [submitHover, setSubmitHover] = useState(false);
 
   const tasksByOrigin = useMemo(() => {
     // Prefer the reliable backend-tagged source over guessing by title text.
@@ -255,7 +257,7 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
             maxHeight: "88vh",
             overflowY: "auto",
             scrollbarWidth: "thin",
-            scrollbarColor: "#9ca3af transparent",
+            scrollbarColor: "#9ca3af44 transparent",
           }}
         >
           <button onClick={onSkip} style={{
@@ -426,16 +428,19 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
             <button
               onClick={onSkip}
               disabled={saving}
+              onMouseEnter={() => setSkipHover(true)}
+              onMouseLeave={() => setSkipHover(false)}
               style={{
                 flex: 1,
                 padding: "12px",
                 borderRadius: 10,
-                border: "1.5px solid #e5e7eb",
-                background: "#fff",
+                border: skipHover ? "1.5px solid #3b82f6" : "1.5px solid #e5e7eb",
+                background: skipHover ? "#dbeafe" : "#fff",
                 fontSize: 14,
                 fontWeight: 600,
-                color: "#374151",
+                color: skipHover ? "#1d4ed8" : "#374151",
                 cursor: saving ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
               }}
             >
               Skip
@@ -444,12 +449,14 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
             <button
               onClick={handleSubmit}
               disabled={saving}
+              onMouseEnter={() => setSubmitHover(true)}
+              onMouseLeave={() => setSubmitHover(false)}
               style={{
-                flex: 0.95, // changed from 1.6
+                flex: 0.95,
                 padding: "12px",
                 borderRadius: 10,
                 border: "none",
-                background: "#007BFF",
+                background: submitHover ? "#007BFF" : "#2f64d5",
                 color: "#fff",
                 fontSize: 14,
                 fontWeight: 700,
@@ -458,6 +465,9 @@ export function WrapUpModal({ open, dueTasks = [], standupPriorities = [], onTog
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 7,
+                transition: "all 0.2s ease",
+                boxShadow: submitHover
+                  ? "0 4px 10px rgba(46, 84, 167, 0.2)" : "0 8px 18px rgba(78, 127, 233, 0.35)",
               }}
             >
               🏆 {saving ? "Submitting…" : "Submit & check out"}

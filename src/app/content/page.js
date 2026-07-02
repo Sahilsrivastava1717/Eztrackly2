@@ -29,9 +29,9 @@ const CATEGORY_META = {
     color: "bg-blue-50 border-blue-200 text-blue-600",
     icon: () => (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
       </svg>
     ),
   },
@@ -40,7 +40,7 @@ const CATEGORY_META = {
     color: "bg-pink-50 border-pink-200 text-pink-600",
     icon: () => (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     ),
   },
@@ -49,9 +49,9 @@ const CATEGORY_META = {
     color: "bg-emerald-50 border-emerald-200 text-emerald-600",
     icon: () => (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
     ),
   },
@@ -60,41 +60,41 @@ const CATEGORY_META = {
     color: "bg-purple-50 border-purple-200 text-purple-600",
     icon: () => (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
       </svg>
     ),
   },
 };
 
 const STATUS_META = {
-  draft:     { label: "Draft",     color: "bg-gray-100 text-gray-600 border-gray-200" },
+  draft: { label: "Draft", color: "bg-gray-100 text-gray-600 border-gray-200" },
   in_review: { label: "In review", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  approved:  { label: "Approved",  color: "bg-blue-100 text-blue-700 border-blue-200" },
+  approved: { label: "Approved", color: "bg-blue-100 text-blue-700 border-blue-200" },
   published: { label: "Published", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  archived:  { label: "Archived",  color: "bg-gray-100 text-gray-400 border-gray-200" },
+  archived: { label: "Archived", color: "bg-gray-100 text-gray-400 border-gray-200" },
 };
 
 const STATUS_OPTIONS = [
-  { value: "all",       label: "All statuses" },
-  { value: "draft",     label: "Draft" },
+  { value: "all", label: "All statuses" },
+  { value: "draft", label: "Draft" },
   { value: "in_review", label: "In review" },
-  { value: "approved",  label: "Approved" },
+  { value: "approved", label: "Approved" },
   { value: "published", label: "Published" },
-  { value: "archived",  label: "Archived" },
+  { value: "archived", label: "Archived" },
 ];
 
 const SORT_OPTIONS = [
   { value: "updated", label: "Recently updated" },
   { value: "created", label: "Recently created" },
-  { value: "title",   label: "Title (A–Z)" },
-  { value: "words",   label: "Word count" },
+  { value: "title", label: "Title (A–Z)" },
+  { value: "words", label: "Word count" },
 ];
 
 const PLATFORMS = [
-  { value: "twitter",   label: "Twitter / X" },
-  { value: "linkedin",  label: "LinkedIn" },
+  { value: "twitter", label: "Twitter / X" },
+  { value: "linkedin", label: "LinkedIn" },
   { value: "instagram", label: "Instagram" },
-  { value: "facebook",  label: "Facebook" },
+  { value: "facebook", label: "Facebook" },
 ];
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -124,10 +124,10 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
     const update = () => {
       const rect = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      if (spaceBelow < 280) {
+      if (false) {
         setStyle({ position: "fixed", bottom: window.innerHeight - rect.top + 4, left: rect.left, minWidth: rect.width, zIndex: 9999 });
       } else {
-        setStyle({ position: "fixed", top: rect.bottom + 4, left: rect.left, minWidth: rect.width, zIndex: 9999 });
+        setStyle({ position: "fixed", bottom: window.innerHeight - rect.top + 4, left: rect.left, minWidth: rect.width, zIndex: 9999 });
       }
     };
     update();
@@ -148,7 +148,7 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
           <span className="flex-1 text-left">{opt.label}</span>
           {opt.value === value && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500 shrink-0">
-              <polyline points="20 6 9 17 4 12"/>
+              <polyline points="20 6 9 17 4 12" />
             </svg>
           )}
         </button>
@@ -164,7 +164,7 @@ function CustomDropdown({ value, onChange, options, prefix, width = "w-44" }) {
         {prefix && <span className="text-gray-400 shrink-0">{prefix}</span>}
         <span className="flex-1 text-left truncate">{selected?.label}</span>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0">
-          <polyline points="6 9 12 15 18 9"/>
+          <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
       {open && createPortal(dropdown, document.body)}
@@ -179,7 +179,7 @@ function FilterChip({ label, onClear }) {
       {label}
       <button onClick={onClear} className="rounded-full p-0.5 hover:bg-blue-100">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </span>
@@ -222,7 +222,7 @@ function NewDocModal({ open, onClose, onCreate }) {
       <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <button onClick={onClose} className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
 
@@ -237,7 +237,7 @@ function NewDocModal({ open, onClose, onCreate }) {
                 className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 hover:border-gray-300 focus:outline-none">
                 <span>{CATEGORY_META[category]?.label}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
-                  <polyline points="6 9 12 15 18 9"/>
+                  <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
               {catOpen && (
@@ -249,7 +249,7 @@ function NewDocModal({ open, onClose, onCreate }) {
                       <span>{meta.label}</span>
                       {category === key && (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500">
-                          <polyline points="20 6 9 17 4 12"/>
+                          <polyline points="20 6 9 17 4 12" />
                         </svg>
                       )}
                     </button>
@@ -298,7 +298,7 @@ function NewDocModal({ open, onClose, onCreate }) {
               <label className="text-xs font-medium text-gray-700">Brief</label>
               <button type="button" className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-blue-500 hover:bg-blue-50">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
                 </svg>
                 AI refine
               </button>
@@ -387,8 +387,8 @@ function DocRow({ doc, onDelete }) {
               {doc.share_enabled && (
                 <Badge className="bg-blue-50 text-blue-600 border-blue-200 gap-1">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                   </svg>
                   Shared
                 </Badge>
@@ -399,9 +399,9 @@ function DocRow({ doc, onDelete }) {
               <span>{doc.word_count ?? 0} words</span>
               <span className="flex items-center gap-1">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
                 {formatDate(doc.created_at)}
               </span>
@@ -413,9 +413,9 @@ function DocRow({ doc, onDelete }) {
           <button ref={btnRef} onClick={openMenu}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="5" r="1" fill="currentColor"/>
-              <circle cx="12" cy="12" r="1" fill="currentColor"/>
-              <circle cx="12" cy="19" r="1" fill="currentColor"/>
+              <circle cx="12" cy="5" r="1" fill="currentColor" />
+              <circle cx="12" cy="12" r="1" fill="currentColor" />
+              <circle cx="12" cy="19" r="1" fill="currentColor" />
             </svg>
           </button>
           {menuOpen && createPortal(
@@ -423,9 +423,9 @@ function DocRow({ doc, onDelete }) {
               <button onMouseDown={(e) => e.stopPropagation()} onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                  <path d="M10 11v6"/><path d="M14 11v6"/>
-                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" /><path d="M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                 </svg>
                 Delete
               </button>
@@ -473,7 +473,7 @@ function DocCard({ doc, onDelete }) {
   return (
     <div className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white transition-all hover:shadow-md hover:border-gray-200 hover:-translate-y-0.5">
       <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-blue-500 to-blue-400 opacity-0 transition-opacity group-hover:opacity-100" />
-      <div className="p-4">
+      <div className="px-3 pb-3 pt-2">
         <Link href={`/content/${doc.id}`} className="block">
           <div className="flex items-start justify-between gap-2">
             <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg border transition-transform group-hover:scale-105", meta?.color)}>
@@ -492,9 +492,9 @@ function DocCard({ doc, onDelete }) {
           <button ref={btnRef} onClick={openMenu}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="5" r="1" fill="currentColor"/>
-              <circle cx="12" cy="12" r="1" fill="currentColor"/>
-              <circle cx="12" cy="19" r="1" fill="currentColor"/>
+              <circle cx="12" cy="5" r="1" fill="currentColor" />
+              <circle cx="12" cy="12" r="1" fill="currentColor" />
+              <circle cx="12" cy="19" r="1" fill="currentColor" />
             </svg>
           </button>
           {menuOpen && createPortal(
@@ -502,8 +502,8 @@ function DocCard({ doc, onDelete }) {
               <button onMouseDown={(e) => e.stopPropagation()} onClick={() => { setMenuOpen(false); onDelete(doc.id); }}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                  <path d="M10 11v6"/><path d="M14 11v6"/>
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" /><path d="M14 11v6" />
                 </svg>
                 Delete
               </button>
@@ -533,6 +533,13 @@ function ContentPageContent() {
   const [deleting, setDeleting] = useState(false);
   const searchRef = useRef(null);
 
+  // Date Picker States
+  const [dateOpen, setDateOpen] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState("any");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const dateRef = useRef(null);
+
   const loadDocs = useCallback(async () => {
     setLoading(true);
     try {
@@ -561,6 +568,18 @@ function ContentPageContent() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    const closePopup = (e) => {
+      if (dateRef.current && !dateRef.current.contains(e.target)) {
+        setDateOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closePopup);
+
+    return () => document.removeEventListener("mousedown", closePopup);
   }, []);
 
   const handleCreate = async (details) => {
@@ -607,11 +626,96 @@ function ContentPageContent() {
   const reviewCount = docs.filter((d) => d.assigned_reviewer_id === user?.id && d.owner_id !== user?.id).length;
 
   const SCOPE_TABS = [
-    { v: "mine",   label: "My docs" },
+    { v: "mine", label: "My docs" },
     { v: "review", label: "📥 To review", badge: reviewCount },
     { v: "shared", label: "🤝 Shared with me" },
-    { v: "all",    label: "All" },
+    { v: "all", label: "All" },
   ];
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const weekDays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  const firstDay = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth(),
+    1
+  ).getDay();
+
+  const totalDays = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth() + 1,
+    0
+  ).getDate();
+
+  const previousMonth = () => {
+    setCurrentMonth(
+      new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() - 1,
+        1
+      )
+    );
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(
+      new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        1
+      )
+    );
+  };
+
+  const isSameDate = (a, b) =>
+    a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear();
+
+  const handleToday = () => {
+    const today = new Date();
+
+    setSelectedPreset("today");
+    setSelectedDate(today);
+    setCurrentMonth(today);
+  };
+
+  const handleLast7 = () => {
+    setSelectedPreset("last7");
+  };
+
+  const handleLast30 = () => {
+    setSelectedPreset("last30");
+  };
+
+  const handleAnyDate = () => {
+    setSelectedPreset("any");
+  };
+
+  const handleDateSelect = (day) => {
+    const d = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      day
+    );
+
+    setSelectedDate(d);
+    setSelectedPreset("custom");
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-20">
@@ -632,7 +736,7 @@ function ContentPageContent() {
           <button onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 hover:-translate-y-0.5 transition-all">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             New document
           </button>
@@ -687,41 +791,223 @@ function ContentPageContent() {
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative flex-1 min-w-0">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title…"
               className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm text-gray-700 outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-50" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:border-blue-200 hover:bg-blue-200 transition-colors shadow-sm">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-800">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              Any date
-            </button>
+            <div className="relative" ref={dateRef}>
+              <button
+                onClick={() => setDateOpen(!dateOpen)}
+                className="flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:border-blue-300"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+
+                {selectedPreset === "today"
+                  ? "Today"
+                  : selectedPreset === "last7"
+                    ? "Last 7 Days"
+                    : selectedPreset === "last30"
+                      ? "Last 30 Days"
+                      : selectedPreset === "custom"
+                        ? selectedDate.toLocaleDateString()
+                        : "Any date"}
+
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {dateOpen && (
+                <div className="absolute left-0 top-12 z-50 w-[285px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="border-b border-gray-200 p-3">
+                    <button
+                      onClick={handleAnyDate}
+                      className={cn(
+                        "mb-1 flex h-10 w-full items-center rounded-xl px-4 text-sm transition",
+                        selectedPreset === "any"
+                          ? "bg-blue-100 font-medium text-blue-600"
+                          : "hover:bg-gray-100 hover:rounded-full"
+                      )}
+                    >
+                      Any date
+                    </button>
+
+                    <button
+                      onClick={handleToday}
+                      className={cn(
+                        "mb-1 flex h-10 w-full items-center rounded-xl px-4 text-sm transition",
+                        selectedPreset === "today"
+                          ? "bg-blue-100 font-medium text-blue-600"
+                          : "hover:bg-gray-100 hover:rounded-full"
+                      )}
+                    >
+                      Today
+                    </button>
+
+                    <button
+                      onClick={handleLast7}
+                      className={cn(
+                        "mb-1 flex h-10 w-full items-center rounded-xl px-4 text-sm transition",
+                        selectedPreset === "last7"
+                          ? "border-2 border-blue-500 bg-blue-50 font-medium text-blue-600"
+                          : "hover:bg-gray-100 hover:rounded-full"
+                      )}
+                    >
+                      Last 7 Days
+                    </button>
+
+                    <button
+                      onClick={handleLast30}
+                      className={cn(
+                        "flex w-full items-center rounded-lg px-3 py-2 text-sm",
+                        selectedPreset === "last30"
+                          ? "bg-blue-100 font-semibold text-blue-600"
+                          : "hover:bg-gray-100 hover:rounded-full"
+                      )}
+                    >
+                      Last 30 Days
+                    </button>
+                  </div>
+
+                  <div className="p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <button
+                        onClick={previousMonth}
+                        className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" fill="none" />
+                        </svg>
+                      </button>
+
+                      <h3 className="font-semibold">
+                        {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                      </h3>
+
+                      <button
+                        onClick={nextMonth}
+                        className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" fill="none" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-y-2 text-center text-xs font-medium text-gray-500 mb-2">
+                      {weekDays.map(day => (
+                        <div key={day}>{day}</div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: firstDay }).map((_, i) => (
+                        <div key={"blank" + i}></div>
+                      ))}
+
+                      {Array.from({ length: totalDays }).map((_, index) => {
+                        const day = index + 1;
+
+                        const date = new Date(
+                          currentMonth.getFullYear(),
+                          currentMonth.getMonth(),
+                          day
+                        );
+
+                        const today = new Date();
+
+                        const diff =
+                          Math.floor(
+                            (today.setHours(0, 0, 0, 0) -
+                              new Date(date).setHours(0, 0, 0, 0))
+                            / 86400000
+                          );
+
+                        let range = false;
+
+                        if (selectedPreset === "last7")
+                          range = diff >= 0 && diff < 7;
+
+                        if (selectedPreset === "last30")
+                          range = diff >= 0 && diff < 30;
+
+                        const active =
+                          selectedPreset === "today"
+                            ? isSameDate(date, new Date())
+                            : selectedPreset === "custom"
+                              ? isSameDate(date, selectedDate)
+                              : false;
+
+                        return (
+                          <button
+                            key={day}
+                            onClick={() => handleDateSelect(day)}
+                            className={cn(
+                              "flex h-9 w-9 items-center justify-center rounded-full text-sm transition",
+
+                              active &&
+                              "bg-blue-500 text-white font-semibold",
+
+                              !active &&
+                              range &&
+                              "bg-blue-100 text-blue-600",
+
+                              !active &&
+                              !range &&
+                              "hover:bg-gray-100"
+                            )}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <CustomDropdown value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} width="w-36" />
             <CustomDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS}
-              prefix={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>}
+              prefix={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>}
               width="w-44" />
             <div className="inline-flex items-center rounded-lg border border-gray-600 bg-white p-0.5 shadow-sm">
               <button onClick={() => setView("list")}
                 className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors",
                   view === "list" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-800")} title="List view">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
-                  <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
-                  <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                  <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
                 </svg>
               </button>
               <button onClick={() => setView("grid")}
                 className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors",
                   view === "grid" ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-600")} title="Grid view">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                  <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
                 </svg>
               </button>
             </div>
@@ -731,7 +1017,7 @@ function ContentPageContent() {
         {activeFilterCount > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-3">
             <svg className="text-gray-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
             </svg>
             <span className="text-[10px] uppercase tracking-wider text-gray-400">Filters:</span>
             {search && <FilterChip label={`"${search}"`} onClear={() => setSearch("")} />}
@@ -748,7 +1034,7 @@ function ContentPageContent() {
       <div className={cn("gap-3", view === "list" ? "grid" : "grid sm:grid-cols-2 lg:grid-cols-3")}>
         {loading && (
           <>
-            {[1,2,3].map((i) => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 flex items-center gap-3 animate-pulse">
                 <div className="h-10 w-10 rounded-lg bg-gray-100 shrink-0" />
                 <div className="flex-1 space-y-2">
@@ -765,8 +1051,8 @@ function ContentPageContent() {
             "rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-16 text-center")}>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
               </svg>
             </div>
             <p className="mt-4 text-sm font-semibold text-gray-800">
@@ -783,7 +1069,7 @@ function ContentPageContent() {
               <button onClick={() => setCreateOpen(true)}
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 New document
               </button>
@@ -803,7 +1089,7 @@ function ContentPageContent() {
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg transition-all hover:bg-blue-600 hover:scale-105"
         title="Add a quick task">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </button>
 

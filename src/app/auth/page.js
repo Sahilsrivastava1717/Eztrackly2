@@ -111,7 +111,7 @@ export default function AuthPage() {
                     name="full_name"
                     value={form.full_name}
                     onChange={handleChange}
-                    placeholder="Sahil Srivastava"
+                    placeholder="Enter Your Name"
                     className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 transition"
                   />
                 </div>
@@ -125,7 +125,7 @@ export default function AuthPage() {
                     required
                     value={form.username}
                     onChange={handleChange}
-                    placeholder="sahil123"
+                    placeholder="Enter Your Username"
                     className="w-full rounded-xl border-0 bg-gray-100 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 transition"
                   />
                 </div>
